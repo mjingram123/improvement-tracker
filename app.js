@@ -240,7 +240,7 @@ function renderDay() {
 
   const onboarding = renderOnboarding();
   const banner = restoredFrom ? `<div class="banner ok">Restored your data from the ${esc(restoredFrom)}. Consider making a backup in More.</div>` : '';
-  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">morning</span></div>`;
+  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1></div>`;
   return onboarding + header + banner + morning + commit;
 }
 
