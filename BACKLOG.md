@@ -20,6 +20,9 @@ Ordered. Top is next. Each ticket has a done condition. Bugs from QA go to the t
 
 ## Done
 
+- [x] T41 Night step dots are tappable buttons again with 44px hit areas (QA cycle 4).
+- [x] T42 Service worker revalidates every asset on fetch so updates land on the next open instead of after the HTTP cache expires.
+
 - [x] T30 Tokens, fonts, base: replace the palette in app.
 - [x] T31 Tab bar and floating button: order Day, Night, Week, More; 88px bar with blur and --bar fill; 56x32 active pill in --blue-soft with --blue-700 icon; 11px labels; icons from design/icons.
 - [x] T32 Shared components restyled per README: toggle 51x31 with knob animation, check circle 26px in 44 hit box with line-through label when checked, kit chips, 1 to 5 rating pills, both segmented controls, primary/secondary/outline/text buttons, Gave in amber button, progress bar, banner, toast, fields with labels, card done state (2px --green border plus "Morning done" line with circled check).

@@ -54,7 +54,7 @@ Visual design and tab restructure for Improvement Tracker, a private on-device h
 --accent: #57c95c;  --accent-700: #8fdc92;  --accent-ink: #0a1f0c;  --accent-soft: #1a3a1e;
 --blue: #6fb8f7;    --blue-700: #9ccdfa;    --blue-soft: #1a3350;
 --green: #57c95c;   --green-700: #8fdc92;   --green-soft: #1a3a1e;
---warn: #e3b98a;    --warn-soft: #3a2d1f;   /* 5.9:1 */
+--warn: #e3b98a;    --warn-soft: #3a2d1f;   /* 7.4:1 */
 --bar: rgba(17,22,25,.88);
 --shadow: 0 1px 2px rgba(0,0,0,.2), 0 6px 20px rgba(0,0,0,.25);
 --radius: 24px;

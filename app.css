@@ -183,7 +183,8 @@ textarea.field { padding: 12px 14px; line-height: 1.45; resize: none; min-height
 /* night step flow */
 .step-head { display: flex; align-items: center; gap: 10px; }
 .step-dots { display: flex; gap: 6px; }
-.step-dot { width: 8px; height: 8px; border-radius: 4px; background: var(--border); display: inline-block; transition: width .2s, background .2s; }
+.step-dot { width: 8px; height: 8px; border-radius: 4px; background: var(--border); display: inline-block; transition: width .2s, background .2s; border: none; padding: 0; position: relative; }
+.step-dot::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; }
 .step-dot.on { width: 18px; background: var(--blue); }
 .step-content-card { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; padding: 28px 20px; }
 

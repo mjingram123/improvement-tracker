@@ -348,7 +348,7 @@ function nightStepNote(d) {
 const NIGHT_STEP_TITLES = ['Wind-down', 'Slips', 'How I showed up', 'One sentence'];
 function renderNightFlow(d, st) {
   const step = st.step;
-  const dots = [0, 1, 2, 3].map((i) => `<span class="step-dot${i <= step ? ' on' : ''}"></span>`).join('');
+  const dots = [0, 1, 2, 3].map((i) => `<button type="button" class="step-dot${i <= step ? ' on' : ''}" data-action="night-goto" data-arg="${i}" aria-label="Go to step ${i + 1}"></button>`).join('');
   const isCard = step === 0 ? ' step-content-card' : '';
   const body = step === 0 ? nightStepWinddown(d) : step === 1 ? nightStepSlips(d) : step === 2 ? nightStepRatings(d) : nightStepNote(d);
   const bodyCard = step === 1 || step === 2 || step === 3 ? `<section class="card${step === 1 ? ' list' : ''}">${body}</section>` : `<section class="card${isCard}">${body}</section>`;
@@ -356,7 +356,7 @@ function renderNightFlow(d, st) {
   const backToSummary = st.forceFlow ? `<button class="btn text block" type="button" data-action="night-summary">Back to summary</button>` : '';
   return `<div class="night-flow">
     <div>
-      <div class="step-head"><span class="step-dots" aria-hidden="true">${dots}</span><span class="meta" aria-live="polite">Step ${step + 1} of 4</span></div>
+      <div class="step-head"><span class="step-dots" role="group" aria-label="Steps">${dots}</span><span class="meta" aria-live="polite">Step ${step + 1} of 4</span></div>
       <h1 class="title" style="margin-top:10px">${esc(NIGHT_STEP_TITLES[step])}</h1>
     </div>
     ${bodyCard}
