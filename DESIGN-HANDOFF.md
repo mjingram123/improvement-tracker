@@ -30,15 +30,20 @@ personal notebook, not a productivity dashboard.
   375x812 phone where possible. Nothing important should live below the fold.
 - **Light and dark.** Both, with system preference. Dark is a real palette, not an inversion.
 
-## Proposed structure: five bottom tabs
+## Structure: four bottom tabs plus a floating urge button
 
 Today it is three tabs with a long scrolling Today screen. Change to:
 
 1. **Day** — morning routine and today's commitments.
-2. **Night** — the evening check-in, as a short step-by-step flow, then a summary.
-3. **Urge** — the panic button, the running 10 minute timer, recent outcomes.
-4. **Week** — rates, mindset trend, journal.
-5. **More** — backup, restore, schedule settings, storage health, setup checklist.
+2. **Week** — rates, mindset trend, journal.
+3. **Night** — the evening check-in, as a short step-by-step flow, then a summary.
+4. **More** — backup, restore, schedule settings, storage health, setup checklist.
+
+Plus a **floating urge button** pinned above the tab bar on every tab. Michael likes it and it
+stays. Tapping it opens the Urge screen as a full-screen overlay with its own close control. It
+is not a tab. While a 10 minute timer runs, the button itself shows the live countdown
+("Riding it out · 07:32") so the state is visible from anywhere, and tapping it returns to
+the running screen.
 
 ### Day tab
 
@@ -69,10 +74,10 @@ finished, or if reopened later, it shows a summary card with everything editable
 Partial completion counts as done. The summary shows what was filled and greys what was
 skipped without nagging.
 
-### Urge tab
+### Urge screen (overlay opened by the floating button)
 
-- One dominant button: **I feel an urge**.
-- Tapping it asks two things on the same screen: which pull (segmented: Scrolling / Porn) and a
+- Opens directly to the question, no second button to tap.
+- It asks two things on the same screen: which pull (segmented: Scrolling / Porn) and a
   short trigger field (placeholder "Trigger, two words (bored, tired, alone)"), then
   **Start 10 minutes**.
 - While running: big countdown, the trigger text, a disabled **Rode it out** button that
@@ -80,7 +85,7 @@ skipped without nagging.
   "Wait it out. Rode it out unlocks when the timer ends."
 - Below: this week's tally, "3 rode · 1 gave in", and the last few urges as a compact list
   (time, kind, trigger, outcome).
-- The tab icon or label should quietly indicate when a timer is running.
+- The floating button carries the running state on every tab, so no tab indicator is needed.
 
 ### Week tab
 
@@ -113,7 +118,7 @@ skipped without nagging.
 
 Toggle, check circle, 1 to 5 segmented rating, large countdown, primary and secondary button,
 progress bar (thin, rounded), sparkline with day labels, card with done state, step indicator,
-bottom tab bar (5 items, running-timer indicator), banner (soft warning and soft success),
+bottom tab bar (4 items with outline icons), floating urge button (idle and running states), banner (soft warning and soft success),
 toast, bottom sheet, day chips, text field and text area (16px font so iOS does not zoom).
 
 ## Platform facts
@@ -129,7 +134,7 @@ toast, bottom sheet, day chips, text field and text area (16px font so iOS does 
 
 ## Deliverables wanted
 
-1. All five tabs in light and dark, including the Night flow steps and the Urge running state.
+1. All four tabs plus the Urge overlay in light and dark, including the Night flow steps and the Urge running state, and the floating button in both states.
 2. A component sheet with states (default, selected, disabled, done).
 3. Tokens: colors (light and dark), type scale, spacing scale, radii, as CSS variables.
 4. Tab bar icons as simple SVG outlines.
