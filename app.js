@@ -296,12 +296,13 @@ function renderNightFlow(d, st) {
   const nextLabel = step === 3 ? 'Done' : 'Next';
   const backToSummary = st.forceFlow ? `<button class="btn-text" type="button" data-action="night-summary">Back to summary</button>` : '';
   return `<div class="step-dots" role="tablist" aria-label="Night steps">${dots}</div>
+    <p class="muted small" style="text-align:center;margin:-2px 0 10px" aria-live="polite">Step ${step + 1} of 4</p>
     <section class="card"><h3>${esc(NIGHT_STEP_TITLES[step])}</h3>${body}</section>
     <div class="btn-row">${backBtn}<button class="btn primary" type="button" data-action="night-next">${nextLabel}</button></div>
     <button class="btn-text" type="button" data-action="night-skip">Skip</button>
     ${backToSummary}`;
 }
-function renderNightSummary(d) {
+function renderNightSummary(d, key) {
   const windText = d.windDown.done ? '15 minutes, done' : 'Skipped';
   const onSlips = LAPSES.filter((l) => d.lapses[l.key]);
   const slipsText = onSlips.length ? onSlips.map((l) => esc(l.label)).join(', ') : 'None';
@@ -314,7 +315,8 @@ function renderNightSummary(d) {
     ${row('Slips', slipsText, 1)}
     ${row('How I showed up', ratingsText, 2)}
     ${row('One sentence', noteText, 3)}
-  </section>`;
+  </section>
+  <p class="muted small" style="text-align:center;margin-top:2px">Logged for ${esc(fmtLong(key))}.</p>`;
 }
 function renderNight() {
   const key = todayKey();
@@ -323,7 +325,7 @@ function renderNight() {
   const st = loadNightUi();
   const allVisited = st.visited.every(Boolean);
   const showSummary = !st.forceFlow && (allVisited || nightCardDone(d));
-  if (showSummary) return header + renderNightSummary(d);
+  if (showSummary) return header + renderNightSummary(d, key);
   if (st.step == null) { st.step = firstIncompleteNightStep(d, st.visited); saveNightUi(st); }
   return header + renderNightFlow(d, st);
 }
