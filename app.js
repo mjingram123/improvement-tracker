@@ -143,7 +143,7 @@ function exportPayload() {
   return JSON.stringify({ app: 'improvement-tracker', exportedAt: new Date().toISOString(), state }, null, 1);
 }
 function exportName() { return `improvement-tracker-${keyOf(new Date())}.json`; }
-function markExported() { state.settings.lastExport = Date.now(); save(); }
+function markExported() { state.settings.lastExport = Date.now(); state.settings.onboarding.backup = true; save(); }
 async function doCopy() {
   try { await navigator.clipboard.writeText(exportPayload()); markExported(); toast('Copied. Paste into Notes to keep it.'); render(); }
   catch { toast('Copy failed. Try Share or Download.'); }
@@ -184,6 +184,20 @@ function ratingRow({ label, value, arg }) {
   return `<div class="row rating-row"><span class="label">${esc(label)}</span><div class="rating" role="group" aria-label="${esc(label)}">
     ${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-action="rate" data-arg="${arg}:${n}" aria-pressed="${value === n}">${n}</button>`).join('')}
   </div></div>`;
+}
+
+// ---------- Onboarding checklist ----------
+function renderOnboarding() {
+  if (state.settings.onboarded) return '';
+  const o = state.settings.onboarding;
+  const items = [
+    { key: 'home', label: 'Add to Home Screen', hint: 'Share button in Safari, then Add to Home Screen. Open it from the icon from now on, that is where your data lives.' },
+    { key: 'shortcuts', label: 'Two reminders', hint: 'Shortcuts app > Automation > Time of Day, 9:00 AM and 10:00 PM, action Open App > Improve. Turn off Ask Before Running.' },
+    { key: 'backup', label: 'First backup', hint: 'More > Share file, save it to Notes.' },
+  ];
+  const rows = items.map((it) => checkRow({ label: it.label, hint: it.hint, checked: !!o[it.key], action: 'onboard-check', arg: it.key })).join('');
+  return `<section class="card"><div class="card-head"><h2>Getting set up</h2></div>${rows}
+    <div class="btn-row"><button class="btn" type="button" data-action="onboard-done">Done, hide this</button></div></section>`;
 }
 
 // ---------- Today ----------
@@ -255,9 +269,10 @@ function renderToday() {
     }).join('<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">') + `</section>`;
   }
 
+  const onboarding = renderOnboarding();
   const banner = restoredFrom ? `<div class="banner ok">Restored your data from the ${esc(restoredFrom)}. Consider making a backup in More.</div>` : '';
   const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">${nightFirst ? 'evening' : 'morning'}</span></div>`;
-  return header + banner + urges + (nightFirst ? night + commit + morning : morning + commit + night);
+  return onboarding + header + banner + urges + (nightFirst ? night + commit + morning : morning + commit + night);
 }
 
 // ---------- Week ----------
@@ -482,6 +497,8 @@ document.addEventListener('click', (e) => {
     case 'set-hangover': setDays('hangoverDays', Number(arg)); break;
     case 'set-waterpolo': setDays('waterPoloDays', Number(arg)); break;
     case 'set-dinner': setDays('dinnerDays', Number(arg)); break;
+    case 'onboard-check': state.settings.onboarding[arg] = !state.settings.onboarding[arg]; save(); render(); break;
+    case 'onboard-done': state.settings.onboarded = true; save(); render(); break;
   }
 });
 document.addEventListener('change', (e) => {
