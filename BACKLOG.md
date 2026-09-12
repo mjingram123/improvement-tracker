@@ -4,7 +4,7 @@ Ordered. Top is next. Each ticket has a done condition. Bugs from QA go to the t
 
 ## Now
 
-- [ ] T43 Intentions. Michael asked where to write down emotional goals like curiosity. Add settings.intentions = { why: '', notes: { curiosity: '', story: '', pauses: '', present: '' } } (additive, normalize handles old saves). More gets an "Intentions" card above Schedule: a labeled textarea "Why I'm doing this" and four labeled single-line fields, one per RATINGS entry, using the rating label as the field label and placeholder examples like "ask the second question". Night step 3 shows each note as a muted 13px line under its rating label when non-empty. Week shows the why text as a muted line under the navigator when non-empty. Typing must not re-render (save on input, debounced, like the reflection field). Included in export automatically since it lives in settings. Done: fields persist, appear in Night and Week, tests cover normalize of the new shape.
+(empty; next tickets come from Michael's real-use feedback)
 
 ## Next
 
@@ -19,6 +19,8 @@ Ordered. Top is next. Each ticket has a done condition. Bugs from QA go to the t
 - Weekly review prompt on Sunday afternoon with three reflection questions.
 
 ## Done
+
+- [x] T43 Intentions card in More; notes shown under Night ratings, why line under the Week navigator.
 
 - [x] T41 Night step dots are tappable buttons again with 44px hit areas (QA cycle 4).
 - [x] T42 Service worker revalidates every asset on fetch so updates land on the next open instead of after the HTTP cache expires.
