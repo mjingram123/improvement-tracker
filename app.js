@@ -1,4 +1,4 @@
-/* Improvement Tracker - local-only, no network, no analytics. */
+/* Improvement Tracker - local-only. Nudges/timer-pings are opt-in ntfy POSTs (T39); no other network calls. */
 (() => {
 'use strict';
 
@@ -9,7 +9,7 @@ const {
   todayKeyFor, defaultState, defaultDay, normalize,
   weekStats: weekStatsPure, lastLapse: lastLapsePure, mergeInto, backupDueDays,
   defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
-  recentUrges, fmtTime, dayEndOptions,
+  recentUrges, fmtTime, dayEndOptions, shortcutsUiVisible,
 } = window.ITLogic;
 
 // ---------- constants ----------
@@ -187,6 +187,28 @@ function mergeImport(raw) {
   return r;
 }
 
+// ---------- ntfy (T39): fixed generic payloads, fire-and-forget, 5s timeout ----------
+async function ntfyPost(topic, body, headers) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, { method: 'POST', body, headers, signal: ctrl.signal });
+    return true;
+  } catch { return false; }
+  finally { clearTimeout(timer); }
+}
+function ntfyTest() {
+  const topic = (state.settings.ntfyTopic || '').trim();
+  if (!topic) { toast('Add an ntfy topic first.'); return; }
+  ntfyPost(topic, 'Nudges are connected.', {}).then((ok) => toast(ok ? 'Sent' : 'Could not send'));
+}
+// Silent: fires when a wind-down or urge timer starts. Cancelling the timer cannot recall it.
+function ntfyTimerPing(delayLabel) {
+  const topic = (state.settings.ntfyTopic || '').trim();
+  if (!state.settings.ntfyTimers || !topic) return;
+  ntfyPost(topic, 'Time.', { Title: 'Timer', Delay: delayLabel }).catch(() => {});
+}
+
 // ---------- rendering helpers ----------
 function toggleRow({ label, hint, checked, action, arg }) {
   return `<label class="row"><span class="label">${esc(label)}${hint ? `<span class="hint">${esc(hint)}</span>` : ''}</span>
@@ -225,7 +247,7 @@ function ring({ id, size, leftMs, totalMs, clockText, clockClass }) {
 // ---------- Onboarding checklist ----------
 const ONBOARDING_ITEMS = [
   { key: 'home', label: 'Add to Home Screen', hint: 'Share button in Safari, then Add to Home Screen. Open it from the icon from now on, that is where your data lives.' },
-  { key: 'shortcuts', label: 'Two reminders', hint: 'Shortcuts app > Automation > Time of Day, 9:00 AM and 10:00 PM, action Open App > Improve. Turn off Ask Before Running.' },
+  { key: 'shortcuts', label: 'Turn on nudges', hint: 'Install the ntfy app, subscribe to the topic in More > Reminders. Two pushes a day, 9:00 and 22:00, generic wording.' },
   { key: 'backup', label: 'First backup', hint: 'More > Share file, save it to Notes.' },
 ];
 function onboardingRows() {
@@ -301,7 +323,7 @@ function nightStepWinddown(d) {
       <button class="btn" type="button" data-action="winddown-cancel">Cancel</button>
       <div class="meta">phone down, wash up, mouth tape</div>`;
   }
-  const scLink = state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Wind%20Down">Start iPhone timer</a>' : '';
+  const scLink = shortcutsUiVisible(state.settings) && state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Wind%20Down">Start iPhone timer</a>' : '';
   return `<button class="btn primary big block" style="min-height:64px" type="button" data-action="winddown-start">Start 15:00</button>${scLink}
     <div class="meta">phone down, wash up, mouth tape</div>`;
 }
@@ -460,6 +482,7 @@ function renderMore() {
   const dot = (ok) => `<span class="status-dot${ok ? '' : ' warn'}"></span>`;
   const chips = (label, arr, action) => `<div class="chipgroup"><div class="label">${esc(label)}</div><div class="daychips">${[1, 2, 3, 4, 5, 6, 0].map((wd) => `<button type="button" data-action="${action}" data-arg="${wd}" aria-pressed="${arr.includes(wd)}"><span>${DAY_LETTERS[wd]}</span></button>`).join('')}</div></div>`;
   const dayEnd = dayEndOptions(s.rolloverHour);
+  const scVisible = shortcutsUiVisible(s);
 
   return `<div class="screen-14">
   <h1 class="title">More</h1>
@@ -497,8 +520,12 @@ function renderMore() {
     </div>
   </section>
   <section class="card"><h2>Reminders</h2>
-    <p class="muted small" style="margin-top:10px">This app never sends notifications. To get nudged, add a Shortcuts automation: at 9:00 am and 10:00 pm, Open App → Improve. Or set two plain alarms called "check in".</p>
-    <div style="margin-top:6px">${toggleRow({ label: 'Shortcut timers', hint: 'If you make Shortcuts named Wind Down and Ride It Out that start a 15 and 10 minute timer, the app can launch them.', checked: s.useShortcutTimers, action: 'settings-bool', arg: 'useShortcutTimers' })}</div>
+    <p class="muted small" style="margin-top:10px">This app never sends notifications on its own. Two daily nudges come from a scheduled ntfy push, not the app; wind-down and urge timers can also ping your phone directly, even locked.</p>
+    <div class="field-group" style="margin-top:12px"><span class="field-label">ntfy topic</span>
+      <input class="field" type="text" id="ntfy-topic" data-action="ntfy-topic" value="${esc(s.ntfyTopic)}" placeholder="improve-yourname-1234"></div>
+    <div class="btn-row" style="margin-top:10px"><button class="btn" type="button" data-action="ntfy-test" ${s.ntfyTopic ? '' : 'disabled'}>Send test</button></div>
+    ${toggleRow({ label: 'Timer pings', hint: 'Pings 15 or 10 minutes after a timer starts. Cancelling the timer cannot recall the ping.', checked: s.ntfyTimers, action: 'settings-bool', arg: 'ntfyTimers' })}
+    ${scVisible ? `<div style="margin-top:6px">${toggleRow({ label: 'Shortcut timers', hint: 'If you make Shortcuts named Wind Down and Ride It Out that start a 15 and 10 minute timer, the app can launch them.', checked: s.useShortcutTimers, action: 'settings-bool', arg: 'useShortcutTimers' })}</div>` : ''}
   </section>
   ${renderSetupInMore()}
   </div>`;
@@ -522,7 +549,7 @@ function renderUrgeLog() {
   </div>`;
 }
 function renderUrgeIdle() {
-  const scLink = state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Ride%20It%20Out">Start iPhone timer</a>' : '';
+  const scLink = shortcutsUiVisible(state.settings) && state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Ride%20It%20Out">Start iPhone timer</a>' : '';
   return `<h1 class="title">Which pull is it?</h1>
     <div class="segmented-blue"><button type="button" data-action="urge-kind" data-arg="scroll" aria-pressed="${urgeKind === 'scroll'}">Scrolling</button><button type="button" data-action="urge-kind" data-arg="porn" aria-pressed="${urgeKind === 'porn'}">Porn</button></div>
     <div class="field-group"><span class="field-label">Trigger</span><input class="field" id="urge-trigger" placeholder="two words: bored, tired, alone"></div>
@@ -649,7 +676,7 @@ document.addEventListener('click', (e) => {
     case 'day-bool': if (t.tagName === 'BUTTON') { d[arg] = !d[arg]; touch(); save(); render(); } break;
     case 'hangover': d.hangover[arg] = !d.hangover[arg]; touch(); save(); render(); break;
     case 'rate': { const [k, n] = arg.split(':'); d.ratings[k] = d.ratings[k] === Number(n) ? 0 : Number(n); touch(); save(); render(); break; }
-    case 'winddown-start': d.windDown.endsAt = Date.now() + WIND_DOWN_MIN * 60000; d.windDown.done = false; touch(); save(); render(); break;
+    case 'winddown-start': d.windDown.endsAt = Date.now() + WIND_DOWN_MIN * 60000; d.windDown.done = false; touch(); save(); render(); ntfyTimerPing('15m'); break;
     case 'winddown-cancel': d.windDown.endsAt = null; touch(); save(); render(); break;
     case 'winddown-reset': d.windDown.done = false; touch(); save(); render(); break;
     case 'night-goto': { const st = loadNightUi(); st.step = Number(arg); saveNightUi(st); render(); break; }
@@ -670,7 +697,7 @@ document.addEventListener('click', (e) => {
       const trigger = ($('#urge-trigger')?.value || '').trim().slice(0, 80);
       const now = Date.now();
       state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: urgeKind, trigger, endsAt: new Date(now + URGE_MIN * 60000).toISOString(), outcome: null });
-      state.meta.updatedAt = now; save(); renderUrgeOverlay(); render(); break;
+      state.meta.updatedAt = now; save(); renderUrgeOverlay(); render(); ntfyTimerPing('10m'); break;
     }
     case 'urge-outcome': {
       const [id, outcome] = arg.split(':');
@@ -700,6 +727,7 @@ document.addEventListener('click', (e) => {
     case 'onboard-check': state.settings.onboarding[arg] = !state.settings.onboarding[arg]; save(); render(); break;
     case 'onboard-done': state.settings.onboarded = true; save(); render(); break;
     case 'rollover': state.settings.rolloverHour = Number(arg); save(); render(); break;
+    case 'ntfy-test': ntfyTest(); break;
   }
 });
 document.addEventListener('change', (e) => {
@@ -710,6 +738,7 @@ document.addEventListener('change', (e) => {
   if (a === 'day-bool' && t.type === 'checkbox') { d[arg] = t.checked; if (arg === 'hungover' && !t.checked) HANGOVER.forEach((h) => d.hangover[h.key] = false); touch(); save(); render(); }
   else if (a === 'lapse') { d.lapses[arg] = t.checked; touch(); save(); render(); }
   else if (a === 'settings-bool') { state.settings[arg] = t.checked; save(); render(); }
+  else if (a === 'ntfy-topic') { state.settings.ntfyTopic = t.value.trim(); save(); render(); }
   else if (a === 'import-file') {
     const f = t.files && t.files[0]; if (!f) return;
     f.text().then((txt) => { try { const r = mergeImport(txt); toast(`Merged ${r.daysMerged} days, ${r.urgesMerged} urges.`); render(); } catch { toast('That does not look like a backup.'); } });
@@ -726,6 +755,8 @@ document.addEventListener('input', (e) => {
     touch();
     if (t.tagName === 'TEXTAREA') { t.style.height = 'auto'; t.style.height = Math.max(48, t.scrollHeight) + 'px'; }
     clearTimeout(noteTimer); noteTimer = setTimeout(save, 300);
+  } else if (a === 'ntfy-topic') {
+    clearTimeout(noteTimer); noteTimer = setTimeout(() => { state.settings.ntfyTopic = t.value.trim(); save(); }, 300);
   }
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#urge-overlay').hidden) closeUrgeOverlay(); });

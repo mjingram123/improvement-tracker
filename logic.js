@@ -67,7 +67,7 @@
       settings: {
         rolloverHour: 4, hangoverDays: [5, 6, 0], waterPoloDays: [2, 0], dinnerDays: [0], lastExport: null,
         onboarded: false, onboarding: { home: false, shortcuts: false, backup: false },
-        useShortcutTimers: false,
+        useShortcutTimers: false, ntfyTopic: '', ntfyTimers: false,
       },
       meta: { updatedAt: 0, createdAt: Date.now() },
     };
@@ -212,6 +212,12 @@
     const hours = base.includes(rolloverHour) ? base.slice() : base.concat([rolloverHour]).sort((a, b) => a - b);
     return hours.map((h) => ({ hour: h, label: fmtHour12(h) }));
   }
+  // The Shortcuts-timers setting stays functional but its toggle/links are hidden
+  // once an ntfy topic is configured (ntfy replaces Shortcuts for nudges/timers).
+  function shortcutsUiVisible(settings) {
+    return !(settings && settings.ntfyTopic && settings.ntfyTopic.trim());
+  }
+
   // ---------- urges ----------
   function recentUrges(state, n) {
     return state.urges.slice().sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, n);
@@ -232,6 +238,6 @@
     defaultState, defaultDay, normalize,
     weekStats, lastLapse, mergeInto, backupDueDays,
     defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
-    recentUrges, fmtTime, fmtHour12, dayEndOptions,
+    recentUrges, fmtTime, fmtHour12, dayEndOptions, shortcutsUiVisible,
   };
 });

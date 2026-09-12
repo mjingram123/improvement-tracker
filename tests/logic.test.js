@@ -280,7 +280,7 @@ test('backupDueDays: returns 0 with 3+ logged days but a recent export', () => {
   assert.equal(L.backupDueDays(s, now), 0);
 });
 
-// ---------- fmtHour12 / dayEndOptions ----------
+// ---------- fmtHour12 / dayEndOptions / shortcutsUiVisible ----------
 test('fmtHour12: midnight, noon, and regular hours', () => {
   assert.equal(L.fmtHour12(0), '12 am');
   assert.equal(L.fmtHour12(2), '2 am');
@@ -304,6 +304,15 @@ test('dayEndOptions: an off-menu hour past 6 sorts to the end', () => {
   const opts = L.dayEndOptions(1);
   assert.deepEqual(opts.map((o) => o.hour), [0, 1, 2, 4, 6]);
 });
+test('shortcutsUiVisible: visible with no ntfy topic set', () => {
+  assert.equal(L.shortcutsUiVisible({ ntfyTopic: '' }), true);
+  assert.equal(L.shortcutsUiVisible({ ntfyTopic: '   ' }), true);
+  assert.equal(L.shortcutsUiVisible({}), true);
+});
+test('shortcutsUiVisible: hidden once an ntfy topic is set', () => {
+  assert.equal(L.shortcutsUiVisible({ ntfyTopic: 'my-topic' }), false);
+});
+
 test('weekStats.logged counts only days with data', () => {
   const st = L.defaultState();
   st.days['2026-09-08'] = L.defaultDay();
