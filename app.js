@@ -534,7 +534,7 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
 $('#sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeSheet(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); else { clearTimeout(noteTimer); save(); } });
-window.addEventListener('pagehide', () => { clearTimeout(noteTimer); save(); });
+window.addEventListener('pagehide', () => { clearTimeout(noteTimer); save(); clearTimeout(saveTimer); mirror(JSON.stringify(state)); });
 
 // ---------- boot ----------
 loadState().then(() => {

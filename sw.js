@@ -1,7 +1,7 @@
 // Network-first service worker: updates land immediately when online,
 // the app still opens offline from the last cached copy.
-const CACHE = 'improve-v1';
-const SHELL = ['./', './index.html', './app.css', './app.js', './manifest.webmanifest',
+const CACHE = 'improve-v2';
+const SHELL = ['./', './index.html', './app.css', './logic.js', './app.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
