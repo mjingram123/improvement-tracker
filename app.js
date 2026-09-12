@@ -34,7 +34,7 @@ let state = defaultState();
 let tab = 'day';
 let weekCursor = null; // week start key being viewed
 let restoredFrom = null;
-let storageHealth = { ls: 'unknown', idb: 'unknown', snaps: 0 };
+let storageHealth = { ls: 'unknown', idb: 'unknown', snaps: 0, persisted: 'unknown' };
 let tickHandle = null;
 
 function day(key = todayKey()) {
@@ -115,6 +115,10 @@ async function loadState() {
     if (best.src && best.s !== ls) restoredFrom = best.src;
   }
   try { navigator.storage?.persist?.(); } catch {}
+  try {
+    if (navigator.storage?.persisted) storageHealth.persisted = (await navigator.storage.persisted()) ? 'granted' : 'not granted';
+    else storageHealth.persisted = 'unknown';
+  } catch { storageHealth.persisted = 'unknown'; }
 }
 let saveTimer = null;
 function save() {
@@ -424,6 +428,7 @@ function renderMore() {
     <div class="kv"><span>Primary store</span><span>${esc(storageHealth.ls)}</span></div>
     <div class="kv"><span>Backup mirror</span><span>${esc(storageHealth.idb)}</span></div>
     <div class="kv"><span>Daily snapshots kept</span><span>${storageHealth.snaps}</span></div>
+    <div class="kv"><span>Persistent storage</span><span>${esc(storageHealth.persisted)}</span></div>
     <p class="muted small" style="margin-top:8px">Two independent stores on the device plus a previous-save copy. If one is lost the app restores from another on next open. Still, keep a backup file.</p>
   </section>
   <section class="card"><div class="card-head"><h2>Schedule</h2></div>
