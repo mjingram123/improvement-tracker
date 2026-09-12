@@ -189,17 +189,25 @@ function ratingRow({ label, value, arg }) {
 }
 
 // ---------- Onboarding checklist ----------
+const ONBOARDING_ITEMS = [
+  { key: 'home', label: 'Add to Home Screen', hint: 'Share button in Safari, then Add to Home Screen. Open it from the icon from now on, that is where your data lives.' },
+  { key: 'shortcuts', label: 'Two reminders', hint: 'Shortcuts app > Automation > Time of Day, 9:00 AM and 10:00 PM, action Open App > Improve. Turn off Ask Before Running.' },
+  { key: 'backup', label: 'First backup', hint: 'More > Share file, save it to Notes.' },
+];
+function onboardingRows() {
+  const o = state.settings.onboarding;
+  return ONBOARDING_ITEMS.map((it) => checkRow({ label: it.label, hint: it.hint, checked: !!o[it.key], action: 'onboard-check', arg: it.key })).join('');
+}
+// Top card on Day until dismissed.
 function renderOnboarding() {
   if (state.settings.onboarded) return '';
-  const o = state.settings.onboarding;
-  const items = [
-    { key: 'home', label: 'Add to Home Screen', hint: 'Share button in Safari, then Add to Home Screen. Open it from the icon from now on, that is where your data lives.' },
-    { key: 'shortcuts', label: 'Two reminders', hint: 'Shortcuts app > Automation > Time of Day, 9:00 AM and 10:00 PM, action Open App > Improve. Turn off Ask Before Running.' },
-    { key: 'backup', label: 'First backup', hint: 'More > Share file, save it to Notes.' },
-  ];
-  const rows = items.map((it) => checkRow({ label: it.label, hint: it.hint, checked: !!o[it.key], action: 'onboard-check', arg: it.key })).join('');
-  return `<section class="card"><div class="card-head"><h2>Getting set up</h2></div>${rows}
+  return `<section class="card"><div class="card-head"><h2>Getting set up</h2></div>${onboardingRows()}
     <div class="btn-row"><button class="btn" type="button" data-action="onboard-done">Done, hide this</button></div></section>`;
+}
+// Moves to More once dismissed, so the instructions stay reachable.
+function renderSetupInMore() {
+  if (!state.settings.onboarded) return '';
+  return `<section class="card"><div class="card-head"><h2>Getting set up</h2></div>${onboardingRows()}</section>`;
 }
 
 // ---------- Day ----------
@@ -427,7 +435,8 @@ function renderMore() {
   <section class="card"><div class="card-head"><h2>Reminders</h2></div>
     <p class="muted small">This app never sends notifications. To get nudged, add a Shortcuts automation: at 9:00 am and 10:00 pm, Open App → Improve. Or set two plain alarms called "check in".</p>
     ${toggleRow({ label: 'Shortcut timers', hint: 'If you make Shortcuts named Wind Down and Ride It Out that start a 15 and 10 minute timer, the app can launch them.', checked: s.useShortcutTimers, action: 'settings-bool', arg: 'useShortcutTimers' })}
-  </section>`;
+  </section>
+  ${renderSetupInMore()}`;
 }
 
 // ---------- urge overlay ----------
