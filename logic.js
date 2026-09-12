@@ -176,12 +176,34 @@
     return (h >= 15 || h < rolloverHour) ? 'night' : 'day';
   }
 
+  // ---------- night flow ----------
+  // The existing partial-done rule: the night card counts as finished with any partial input.
+  function nightCardDone(d) {
+    return !!(d.windDown.done || RATINGS.some((r) => d.ratings[r.key] > 0) || (d.note && d.note.trim().length > 0));
+  }
+  // Step completeness for the 4-step flow. `visited` is the sessionStorage-tracked
+  // array of 4 booleans (step 1, Slips, has no data-only signal: turning zero slips on
+  // is a valid, complete answer, so it relies on the visited flag instead).
+  function nightStepDone(d, visited, i) {
+    switch (i) {
+      case 0: return !!(d.windDown && d.windDown.done);
+      case 1: return !!(visited && visited[1]);
+      case 2: return RATINGS.some((r) => d.ratings[r.key] > 0);
+      case 3: return !!(d.note && d.note.trim().length > 0);
+      default: return false;
+    }
+  }
+  function firstIncompleteNightStep(d, visited) {
+    for (let i = 0; i < 4; i++) if (!nightStepDone(d, visited, i)) return i;
+    return 0;
+  }
+
   return {
     LAPSES, RATINGS, HANGOVER, DAY_NAMES, MONTHS,
     pad, keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
     todayKeyFor, urgeDayKeyFor,
     defaultState, defaultDay, normalize,
     weekStats, lastLapse, mergeInto, backupDueDays,
-    defaultTab,
+    defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
   };
 });

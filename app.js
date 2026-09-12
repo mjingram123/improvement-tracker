@@ -8,7 +8,7 @@ const {
   keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
   todayKeyFor, defaultState, defaultDay, normalize,
   weekStats: weekStatsPure, lastLapse: lastLapsePure, mergeInto, backupDueDays,
-  defaultTab,
+  defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
 } = window.ITLogic;
 
 // ---------- constants ----------
@@ -248,38 +248,87 @@ function renderDay() {
 }
 
 // ---------- Night ----------
+const NIGHT_UI_KEY = 'it:nightUi';
+function loadNightUi() {
+  let st = null;
+  try { st = JSON.parse(sessionStorage.getItem(NIGHT_UI_KEY) || 'null'); } catch {}
+  const key = todayKey();
+  if (!st || st.day !== key || !Array.isArray(st.visited) || st.visited.length !== 4) {
+    st = { day: key, visited: [false, false, false, false], step: null, forceFlow: false };
+  }
+  return st;
+}
+function saveNightUi(st) {
+  try { sessionStorage.setItem(NIGHT_UI_KEY, JSON.stringify(st)); } catch {}
+}
+
+function nightStepWinddown(d) {
+  const wd = d.windDown;
+  if (wd.done) {
+    return `<div class="row"><span class="label">Wind-down<span class="hint">15 minutes, done</span></span><button class="check" type="button" data-action="winddown-reset" aria-pressed="true" aria-label="Wind-down done, tap to reset">&#10003;</button></div>`;
+  }
+  if (wd.endsAt) {
+    return `<div class="timer-wrap"><div><div class="muted small">Wind-down</div><div class="timer" id="winddown-timer">${mmss(wd.endsAt - Date.now())}</div></div>
+      <button class="btn" type="button" data-action="winddown-cancel">Cancel</button></div>`;
+  }
+  return `<div class="row"><span class="label">Wind-down<span class="hint">phone down, wash up, mouth tape</span></span>
+      <span style="display:flex;gap:8px;align-items:center">${state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Wind%20Down">Start iPhone timer</a>' : ''}<button class="btn primary" type="button" data-action="winddown-start">Start 15:00</button></span></div>`;
+}
+function nightStepSlips(d) {
+  let out = '';
+  for (const l of LAPSES) {
+    out += toggleRow({ label: l.label, hint: l.hint, checked: d.lapses[l.key], action: 'lapse', arg: l.key, warn: true });
+    if (d.lapses[l.key]) {
+      out += `<div class="sub-rows"><textarea class="field" rows="1" data-action="lapse-note" data-arg="${l.key}" placeholder="What was happening right before?">${esc(d.lapseNotes[l.key])}</textarea></div>`;
+    }
+  }
+  return out;
+}
+function nightStepRatings(d) {
+  return RATINGS.map((r) => ratingRow({ label: r.label, value: d.ratings[r.key], arg: r.key })).join('');
+}
+function nightStepNote(d) {
+  return `<textarea class="field" rows="3" data-action="note" placeholder="About today.">${esc(d.note)}</textarea>`;
+}
+const NIGHT_STEP_TITLES = ['Wind-down', 'Slips', 'How I showed up', 'One sentence'];
+function renderNightFlow(d, st) {
+  const step = st.step;
+  const dots = [0, 1, 2, 3].map((i) => `<button type="button" class="step-dot${i === step ? ' current' : ''}${nightStepDone(d, st.visited, i) ? ' done' : ''}" data-action="night-goto" data-arg="${i}" aria-label="${esc(NIGHT_STEP_TITLES[i])}" aria-current="${i === step ? 'step' : 'false'}"></button>`).join('');
+  const body = step === 0 ? nightStepWinddown(d) : step === 1 ? nightStepSlips(d) : step === 2 ? nightStepRatings(d) : nightStepNote(d);
+  const backBtn = step > 0 ? `<button class="btn" type="button" data-action="night-back">Back</button>` : '';
+  const nextLabel = step === 3 ? 'Done' : 'Next';
+  const backToSummary = st.forceFlow ? `<button class="btn-text" type="button" data-action="night-summary">Back to summary</button>` : '';
+  return `<div class="step-dots" role="tablist" aria-label="Night steps">${dots}</div>
+    <section class="card"><h3>${esc(NIGHT_STEP_TITLES[step])}</h3>${body}</section>
+    <div class="btn-row">${backBtn}<button class="btn primary" type="button" data-action="night-next">${nextLabel}</button></div>
+    <button class="btn-text" type="button" data-action="night-skip">Skip</button>
+    ${backToSummary}`;
+}
+function renderNightSummary(d) {
+  const windText = d.windDown.done ? '15 minutes, done' : 'Skipped';
+  const onSlips = LAPSES.filter((l) => d.lapses[l.key]);
+  const slipsText = onSlips.length ? onSlips.map((l) => esc(l.label)).join(', ') : 'None';
+  const onRatings = RATINGS.filter((r) => d.ratings[r.key] > 0);
+  const ratingsText = onRatings.length ? onRatings.map((r) => `${esc(r.label)}: ${d.ratings[r.key]}`).join(' · ') : 'Skipped';
+  const noteText = d.note && d.note.trim() ? esc(d.note) : 'No note';
+  const row = (label, value, step) => `<div class="row"><span class="label">${esc(label)}<span class="hint">${value}</span></span><button class="btn" type="button" data-action="night-edit" data-arg="${step}">Edit</button></div>`;
+  return `<section class="card done"><div class="card-head"><h2>Tonight</h2><span class="badge">done</span></div>
+    ${row('Wind-down', windText, 0)}
+    ${row('Slips', slipsText, 1)}
+    ${row('How I showed up', ratingsText, 2)}
+    ${row('One sentence', noteText, 3)}
+  </section>`;
+}
 function renderNight() {
   const key = todayKey();
   const d = day(key);
-  const s = state.settings;
-  const wdn = d.windDown;
-  const anyRating = RATINGS.some((r) => d.ratings[r.key] > 0);
-  const nightDone = wdn.done || anyRating || d.note.trim().length > 0;
-
   const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">evening</span></div>`;
-  let night = `<section class="card${nightDone ? ' done' : ''}"><div class="card-head"><h2>Night</h2>${nightDone ? '<span class="badge">done</span>' : ''}</div>`;
-  if (wdn.done) {
-    night += `<div class="row"><span class="label">Wind-down<span class="hint">15 minutes, done</span></span><button class="check" type="button" data-action="winddown-reset" aria-pressed="true" aria-label="Wind-down done, tap to reset">&#10003;</button></div>`;
-  } else if (wdn.endsAt) {
-    night += `<div class="timer-wrap"><div><div class="muted small">Wind-down</div><div class="timer" id="winddown-timer">${mmss(wdn.endsAt - Date.now())}</div></div>
-      <button class="btn" type="button" data-action="winddown-cancel">Cancel</button></div>`;
-  } else {
-    night += `<div class="row"><span class="label">Wind-down<span class="hint">phone down, wash up, mouth tape</span></span>
-      <span style="display:flex;gap:8px;align-items:center">${s.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Wind%20Down">Start iPhone timer</a>' : ''}<button class="btn primary" type="button" data-action="winddown-start">Start 15:00</button></span></div>`;
-  }
-  night += `<h3 style="margin-top:10px">Slips</h3>`;
-  for (const l of LAPSES) {
-    night += toggleRow({ label: l.label, hint: l.hint, checked: d.lapses[l.key], action: 'lapse', arg: l.key, warn: true });
-    if (d.lapses[l.key]) {
-      night += `<div class="sub-rows"><textarea class="field" rows="1" data-action="lapse-note" data-arg="${l.key}" placeholder="What was happening right before?">${esc(d.lapseNotes[l.key])}</textarea></div>`;
-    }
-  }
-  night += `<h3 style="margin-top:14px">How I showed up</h3>`;
-  for (const r of RATINGS) night += ratingRow({ label: r.label, value: d.ratings[r.key], arg: r.key });
-  night += `<h3 style="margin-top:14px">One sentence</h3>
-    <textarea class="field" rows="2" data-action="note" placeholder="About today.">${esc(d.note)}</textarea>`;
-  night += `</section>`;
-  return header + night;
+  const st = loadNightUi();
+  const allVisited = st.visited.every(Boolean);
+  const showSummary = !st.forceFlow && (allVisited || nightCardDone(d));
+  if (showSummary) return header + renderNightSummary(d);
+  if (st.step == null) { st.step = firstIncompleteNightStep(d, st.visited); saveNightUi(st); }
+  return header + renderNightFlow(d, st);
 }
 
 // ---------- Week ----------
@@ -478,6 +527,17 @@ document.addEventListener('click', (e) => {
     case 'winddown-start': d.windDown.endsAt = Date.now() + WIND_DOWN_MIN * 60000; d.windDown.done = false; touch(); save(); render(); break;
     case 'winddown-cancel': d.windDown.endsAt = null; touch(); save(); render(); break;
     case 'winddown-reset': d.windDown.done = false; touch(); save(); render(); break;
+    case 'night-goto': { const st = loadNightUi(); st.step = Number(arg); saveNightUi(st); render(); break; }
+    case 'night-next':
+    case 'night-skip': {
+      const st = loadNightUi();
+      st.visited[st.step] = true;
+      if (st.step < 3) st.step += 1; else st.forceFlow = false;
+      saveNightUi(st); render(); break;
+    }
+    case 'night-back': { const st = loadNightUi(); if (st.step > 0) st.step -= 1; saveNightUi(st); render(); break; }
+    case 'night-edit': { const st = loadNightUi(); st.step = Number(arg); st.forceFlow = true; saveNightUi(st); render(); break; }
+    case 'night-summary': { const st = loadNightUi(); st.forceFlow = false; saveNightUi(st); render(); break; }
     case 'urge-open': openSheet(); break;
     case 'sheet-close': closeSheet(); break;
     case 'sheet-kind': sheetKind = arg; document.querySelectorAll('[data-action="sheet-kind"]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.arg === arg)); break;
