@@ -354,6 +354,7 @@ function renderMore() {
   const s = state.settings;
   const last = s.lastExport ? new Date(s.lastExport) : null;
   const daysLogged = Object.keys(state.days).length;
+  const standalone = window.navigator && window.navigator.standalone === true;
   const chips = (label, arr, action) => `<div class="row" style="display:block"><span class="label">${label}</span><div class="daychips">${[1, 2, 3, 4, 5, 6, 0].map((wd) => `<button type="button" data-action="${action}" data-arg="${wd}" aria-pressed="${arr.includes(wd)}">${DAY_NAMES[wd]}</button>`).join('')}</div></div>`;
   return `<div class="header"><h1>More</h1></div>
   <section class="card"><div class="card-head"><h2>Backup</h2></div>
@@ -361,7 +362,7 @@ function renderMore() {
     <div class="kv" style="margin-top:8px"><span>Last backup</span><span>${last ? `${fmtLong(keyOf(last))}` : 'never'}</span></div>
     <div class="kv"><span>Days logged</span><span>${daysLogged}</span></div>
     <div class="btn-row"><button class="btn primary" type="button" data-action="share">Share file</button><button class="btn" type="button" data-action="copy">Copy text</button></div>
-    <div class="btn-row"><button class="btn" type="button" data-action="download">Download file</button></div>
+    ${standalone ? '' : '<div class="btn-row"><button class="btn" type="button" data-action="download">Download file</button></div>'}
   </section>
   <section class="card"><div class="card-head"><h2>Restore</h2></div>
     <p class="muted small">Merges a backup into what is here. Newer entries win, nothing is deleted.</p>
