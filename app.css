@@ -121,6 +121,7 @@ p { margin: 0; }
 }
 .field:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 textarea.field { min-height: 44px; }
+.field-label { display: block; color: var(--muted); font-size: 13px; margin: 10px 0 0; font-weight: 600; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

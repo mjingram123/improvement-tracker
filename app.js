@@ -281,7 +281,7 @@ function nightStepRatings(d) {
   return RATINGS.map((r) => ratingRow({ label: r.label, value: d.ratings[r.key], arg: r.key })).join('');
 }
 function nightStepNote(d) {
-  return `<textarea class="field" rows="3" data-action="note" placeholder="About today.">${esc(d.note)}</textarea>`;
+  return `<label class="field-label" for="night-note">Reflection</label><textarea class="field" id="night-note" rows="3" data-action="note" placeholder="About today.">${esc(d.note)}</textarea>`;
 }
 const NIGHT_STEP_TITLES = ['Wind-down', 'Slips', 'How I showed up', 'One sentence'];
 function renderNightFlow(d, st) {
@@ -416,7 +416,8 @@ function renderMore() {
   <section class="card"><div class="card-head"><h2>Restore</h2></div>
     <p class="muted small">Merges a backup into what is here. Newer entries win, nothing is deleted.</p>
     <div class="btn-row"><label class="btn block" for="import-file">Choose backup file</label><input id="import-file" class="sr" type="file" accept="application/json,.json,text/plain" data-action="import-file"></div>
-    <textarea class="field" id="import-text" rows="2" placeholder="Or paste backup text here"></textarea>
+    <label class="field-label" for="import-text">Backup text</label>
+    <textarea class="field" id="import-text" rows="2" placeholder="Paste a backup here"></textarea>
     <div class="btn-row"><button class="btn" type="button" data-action="import-text">Merge pasted text</button></div>
   </section>
   <section class="card"><div class="card-head"><h2>Storage health</h2></div>
@@ -458,7 +459,8 @@ function renderUrgeTallySection() {
 function renderUrgeIdle() {
   return `<h2>What is pulling?</h2>
     <div class="choice"><button type="button" data-action="urge-kind" data-arg="scroll" aria-pressed="${urgeKind === 'scroll'}">Scrolling</button><button type="button" data-action="urge-kind" data-arg="porn" aria-pressed="${urgeKind === 'porn'}">Porn</button></div>
-    <input class="field" id="urge-trigger" placeholder="Trigger, two words (bored, tired, alone)">
+    <label class="field-label" for="urge-trigger">Trigger</label>
+    <input class="field" id="urge-trigger" placeholder="two words: bored, tired, alone">
     <div class="btn-row">${state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Ride%20It%20Out">Start iPhone timer</a>' : ''}<button class="btn primary block" type="button" data-action="urge-start">Start 10 minutes</button></div>
     ${renderUrgeTallySection()}`;
 }
