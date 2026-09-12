@@ -230,7 +230,7 @@ function renderToday() {
   // night
   const wdn = d.windDown;
   const anyRating = RATINGS.some((r) => d.ratings[r.key] > 0);
-  const nightDone = wdn.done && anyRating;
+  const nightDone = wdn.done || anyRating || d.note.trim().length > 0;
   let night = `<section class="card${nightDone ? ' done' : ''}"><div class="card-head"><h2>Night</h2>${nightDone ? '<span class="badge">done</span>' : ''}</div>`;
   if (wdn.done) {
     night += `<div class="row"><span class="label">Wind-down<span class="hint">15 minutes, done</span></span><button class="check" type="button" data-action="winddown-reset" aria-pressed="true" aria-label="Wind-down done, tap to reset">&#10003;</button></div>`;
