@@ -238,7 +238,8 @@ function renderToday() {
     night += `<div class="timer-wrap"><div><div class="muted small">Wind-down</div><div class="timer" id="winddown-timer">${mmss(wdn.endsAt - Date.now())}</div></div>
       <button class="btn" type="button" data-action="winddown-cancel">Cancel</button></div>`;
   } else {
-    night += `<div class="row"><span class="label">Wind-down<span class="hint">phone down, wash up, mouth tape</span></span><button class="btn primary" type="button" data-action="winddown-start">Start 15:00</button></div>`;
+    night += `<div class="row"><span class="label">Wind-down<span class="hint">phone down, wash up, mouth tape</span></span>
+      <span style="display:flex;gap:8px;align-items:center">${s.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Wind%20Down">Start iPhone timer</a>' : ''}<button class="btn primary" type="button" data-action="winddown-start">Start 15:00</button></span></div>`;
   }
   night += `<h3 style="margin-top:10px">Slips</h3>`;
   for (const l of LAPSES) {
@@ -385,6 +386,7 @@ function renderMore() {
   </section>
   <section class="card"><div class="card-head"><h2>Reminders</h2></div>
     <p class="muted small">This app never sends notifications. To get nudged, add a Shortcuts automation: at 9:00 am and 10:00 pm, Open App → Improve. Or set two plain alarms called "check in".</p>
+    ${toggleRow({ label: 'Shortcut timers', hint: 'If you make Shortcuts named Wind Down and Ride It Out that start a 15 and 10 minute timer, the app can launch them.', checked: s.useShortcutTimers, action: 'settings-bool', arg: 'useShortcutTimers' })}
   </section>`;
 }
 
@@ -397,7 +399,7 @@ function openSheet() {
     <h2>What is pulling?</h2>
     <div class="choice"><button type="button" data-action="sheet-kind" data-arg="scroll" aria-pressed="true">Scrolling</button><button type="button" data-action="sheet-kind" data-arg="porn" aria-pressed="false">Porn</button></div>
     <input class="field" id="sheet-trigger" placeholder="Trigger, two words (bored, tired, alone)">
-    <div class="btn-row"><button class="btn" type="button" data-action="sheet-close">Cancel</button><button class="btn primary" type="button" data-action="sheet-start">Start 10 minutes</button></div>
+    <div class="btn-row">${state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Ride%20It%20Out">Start iPhone timer</a>' : ''}<button class="btn" type="button" data-action="sheet-close">Cancel</button><button class="btn primary" type="button" data-action="sheet-start">Start 10 minutes</button></div>
   </div>`;
   el.hidden = false;
   setTimeout(() => $('#sheet-trigger')?.focus(), 50);
@@ -510,6 +512,7 @@ document.addEventListener('change', (e) => {
   if (a === 'day-bool' && t.type === 'checkbox') { d[arg] = t.checked; if (arg === 'hungover' && !t.checked) HANGOVER.forEach((h) => d.hangover[h.key] = false); touch(); save(); render(); }
   else if (a === 'lapse') { d.lapses[arg] = t.checked; touch(); save(); render(); }
   else if (a === 'rollover') { state.settings.rolloverHour = Number(t.value); save(); render(); }
+  else if (a === 'settings-bool') { state.settings[arg] = t.checked; save(); render(); }
   else if (a === 'import-file') {
     const f = t.files && t.files[0]; if (!f) return;
     f.text().then((txt) => { try { const r = mergeImport(txt); toast(`Merged ${r.daysMerged} days, ${r.urgesMerged} urges.`); render(); } catch { toast('That does not look like a backup.'); } });
