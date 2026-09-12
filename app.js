@@ -303,7 +303,7 @@ function renderNightFlow(d, st) {
     ${backToSummary}`;
 }
 function renderNightSummary(d, key) {
-  const windText = d.windDown.done ? '15 minutes, done' : 'Skipped';
+  const windText = d.windDown.done ? '15 minutes, done' : d.windDown.endsAt ? `In progress, ${mmss(d.windDown.endsAt - Date.now())} left` : 'Skipped';
   const onSlips = LAPSES.filter((l) => d.lapses[l.key]);
   const slipsText = onSlips.length ? onSlips.map((l) => esc(l.label)).join(', ') : 'None';
   const onRatings = RATINGS.filter((r) => d.ratings[r.key] > 0);
@@ -369,9 +369,9 @@ function renderWeek() {
   if (cur.n === 0) return out + `<section class="card"><p class="muted">Nothing logged yet for this week.</p></section>`;
 
   out += `<section class="card"><div class="card-head"><h2>Slips</h2><span class="muted small">days out of ${cur.n}</span></div>`;
-  for (const l of LAPSES) out += rate(l.label, cur.lapses[l.key], cur.n, { warn: true, prev: prev.n ? prev.lapses[l.key] : null, prevN: prev.n || null });
+  for (const l of LAPSES) out += rate(l.label, cur.lapses[l.key], cur.n, { warn: true, prev: prev.logged ? prev.lapses[l.key] : null, prevN: prev.logged ? prev.n : null });
   out += `<div class="stat"><div class="line"><span>Urges ridden out</span><span class="val">${cur.rode} <span class="muted">rode</span> · ${cur.gave} <span class="muted">gave in</span></span></div>
-    ${prev.n ? `<span class="cmp">last week ${prev.rode} rode · ${prev.gave} gave in</span>` : ''}</div>`;
+    ${prev.logged ? `<span class="cmp">last week ${prev.rode} rode · ${prev.gave} gave in</span>` : ''}</div>`;
   const lp = lastLapse('porn');
   const since = lp ? Math.round((dateOf(today) - dateOf(lp)) / 86400000) : null;
   out += `<p class="muted small" style="margin-top:10px">${lp ? `Last porn slip logged ${since === 0 ? 'today' : since + (since === 1 ? ' day ago' : ' days ago')}.` : 'No porn slips logged yet.'}</p></section>`;
@@ -386,9 +386,9 @@ function renderWeek() {
   out += `</section>`;
 
   out += `<section class="card"><div class="card-head"><h2>Routines</h2></div>`;
-  out += rate('Stretched', cur.stretched, cur.n, { prev: prev.n ? prev.stretched : null, prevN: prev.n || null });
-  out += rate('Wind-down done', cur.windDown, cur.n, { prev: prev.n ? prev.windDown : null, prevN: prev.n || null });
-  out += rate('Gym', cur.gym, null, { prev: prev.n ? prev.gym : null });
+  out += rate('Stretched', cur.stretched, cur.n, { prev: prev.logged ? prev.stretched : null, prevN: prev.logged ? prev.n : null });
+  out += rate('Wind-down done', cur.windDown, cur.n, { prev: prev.logged ? prev.windDown : null, prevN: prev.logged ? prev.n : null });
+  out += rate('Gym', cur.gym, null, { prev: prev.logged ? prev.gym : null });
   if (cur.waterPoloPossible) out += rate('Water polo', cur.waterPolo, cur.waterPoloPossible);
   if (cur.dinnerPossible) out += rate('Dinner out', cur.dinner, cur.dinnerPossible);
   out += `</section>`;

@@ -123,7 +123,7 @@
       return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
     });
     return {
-      n, keys,
+      n, keys, logged: days.length,
       lapses: Object.fromEntries(LAPSES.map((l) => [l.key, count((d) => d.lapses[l.key])])),
       stretched: count((d) => d.stretched), windDown: count((d) => d.windDown.done), gym: count((d) => d.gym),
       waterPolo: count((d) => d.waterPolo), waterPoloPossible: keys.filter((k) => state.settings.waterPoloDays.includes(weekdayOf(k))).length,

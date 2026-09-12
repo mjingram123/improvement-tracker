@@ -279,3 +279,15 @@ test('backupDueDays: returns 0 with 3+ logged days but a recent export', () => {
   s.settings.lastExport = now - 2 * 86400000;
   assert.equal(L.backupDueDays(s, now), 0);
 });
+
+test('weekStats.logged counts only days with data', () => {
+  const st = L.defaultState();
+  st.days['2026-09-08'] = L.defaultDay();
+  st.days['2026-09-09'] = L.defaultDay();
+  const w = L.weekStats(st, '2026-09-07', '2026-09-11');
+  assert.equal(w.n, 5);
+  assert.equal(w.logged, 2);
+  const empty = L.weekStats(st, '2026-08-31', '2026-09-11');
+  assert.equal(empty.n, 7);
+  assert.equal(empty.logged, 0);
+});
