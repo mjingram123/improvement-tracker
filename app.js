@@ -1,0 +1,643 @@
+/* Improvement Tracker - local-only, no network, no analytics. */
+(() => {
+'use strict';
+
+// ---------- constants ----------
+const LS_KEY = 'it:state:v1';
+const LS_PREV = 'it:state:v1:prev';
+const IDB_NAME = 'improvement-tracker';
+const IDB_STORE = 'kv';
+const SNAP_KEEP = 60;
+const WIND_DOWN_MIN = 15;
+const URGE_MIN = 10;
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const LAPSES = [
+  { key: 'scroll', label: 'Scrolled past limits' },
+  { key: 'porn', label: 'Porn' },
+  { key: 'nag', label: 'Nagged someone', hint: 'cars, dishes, whatever' },
+];
+const RATINGS = [
+  { key: 'curiosity', label: 'Curious in conversation' },
+  { key: 'story', label: 'Stayed in my story, detached from outcomes' },
+  { key: 'pauses', label: 'Pushed through pauses' },
+  { key: 'present', label: 'Committed to where I was' },
+];
+const HANGOVER = [
+  { key: 'lmnt', label: 'LMNT' },
+  { key: 'food', label: 'Food' },
+  { key: 'ibuprofen', label: 'Ibuprofen' },
+  { key: 'walk', label: 'Walk' },
+];
+
+// ---------- utils ----------
+const $ = (sel, root = document) => root.querySelector(sel);
+const pad = (n) => String(n).padStart(2, '0');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dateOf = (key) => { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (key, n) => { const d = dateOf(key); d.setDate(d.getDate() + n); return keyOf(d); };
+const weekdayOf = (key) => dateOf(key).getDay();
+const fmtLong = (key) => { const d = dateOf(key); return `${DAY_NAMES[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`; };
+const fmtShort = (key) => { const d = dateOf(key); return `${MONTHS[d.getMonth()]} ${d.getDate()}`; };
+const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+
+function todayKey() {
+  const d = new Date();
+  if (d.getHours() < state.settings.rolloverHour) d.setDate(d.getDate() - 1);
+  return keyOf(d);
+}
+function weekStart(key) { // Monday
+  const wd = weekdayOf(key);
+  return addDays(key, wd === 0 ? -6 : 1 - wd);
+}
+
+// ---------- state ----------
+function defaultState() {
+  return {
+    version: 1,
+    days: {},
+    urges: [],
+    settings: { rolloverHour: 4, hangoverDays: [5, 6, 0], waterPoloDays: [2, 0], dinnerDays: [0], lastExport: null },
+    meta: { updatedAt: 0, createdAt: Date.now() },
+  };
+}
+function defaultDay() {
+  return {
+    u: 0,
+    stretched: false, hungover: false, hangover: { lmnt: false, food: false, ibuprofen: false, walk: false },
+    gym: false, waterPolo: false, dinnerOut: false,
+    lapses: { scroll: false, porn: false, nag: false }, lapseNotes: { scroll: '', porn: '', nag: '' },
+    ratings: { curiosity: 0, story: 0, pauses: 0, present: 0 },
+    note: '', windDown: { endsAt: null, done: false },
+  };
+}
+function normalize(s) {
+  const d = defaultState();
+  if (!s || typeof s !== 'object') return d;
+  const out = { ...d, ...s };
+  out.settings = { ...d.settings, ...(s.settings || {}) };
+  out.meta = { ...d.meta, ...(s.meta || {}) };
+  out.days = {};
+  for (const [k, v] of Object.entries(s.days || {})) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !v || typeof v !== 'object') continue;
+    const dd = defaultDay();
+    out.days[k] = {
+      ...dd, ...v,
+      hangover: { ...dd.hangover, ...(v.hangover || {}) },
+      lapses: { ...dd.lapses, ...(v.lapses || {}) },
+      lapseNotes: { ...dd.lapseNotes, ...(v.lapseNotes || {}) },
+      ratings: { ...dd.ratings, ...(v.ratings || {}) },
+      windDown: { ...dd.windDown, ...(v.windDown || {}) },
+    };
+  }
+  out.urges = Array.isArray(s.urges) ? s.urges.filter((u) => u && u.id && u.at) : [];
+  return out;
+}
+
+let state = defaultState();
+let tab = 'today';
+let weekCursor = null; // week start key being viewed
+let restoredFrom = null;
+let storageHealth = { ls: 'unknown', idb: 'unknown', snaps: 0 };
+let tickHandle = null;
+
+function day(key = todayKey()) {
+  if (!state.days[key]) state.days[key] = defaultDay();
+  return state.days[key];
+}
+function touch(key) { const d = day(key); d.u = Date.now(); state.meta.updatedAt = d.u; }
+
+// ---------- IndexedDB mirror ----------
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) return reject(new Error('no idb'));
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const r = tx.objectStore(IDB_STORE).get(key);
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function idbKeys() {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const r = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).getAllKeys();
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function idbPut(entries) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const st = tx.objectStore(IDB_STORE);
+    for (const [k, v] of entries) st.put(v, k);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbDelete(keys) {
+  if (!keys.length) return;
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const st = tx.objectStore(IDB_STORE);
+    for (const k of keys) st.delete(k);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ---------- persistence ----------
+function parseSafe(json) {
+  if (!json) return null;
+  try { const v = JSON.parse(json); return v && typeof v === 'object' ? v : null; } catch { return null; }
+}
+async function loadState() {
+  let ls = null, prev = null, idb = null;
+  try { ls = parseSafe(localStorage.getItem(LS_KEY)); prev = parseSafe(localStorage.getItem(LS_PREV)); storageHealth.ls = 'ok'; }
+  catch { storageHealth.ls = 'unavailable'; }
+  try { idb = await idbGet('current'); storageHealth.idb = 'ok'; }
+  catch { storageHealth.idb = 'unavailable'; }
+  try { const keys = await idbKeys(); storageHealth.snaps = keys.filter((k) => String(k).startsWith('snap:')).length; } catch {}
+
+  const candidates = [
+    { src: null, s: ls }, { src: 'previous save', s: prev }, { src: 'backup mirror', s: idb },
+  ].filter((c) => c.s);
+  candidates.sort((a, b) => (b.s.meta?.updatedAt || 0) - (a.s.meta?.updatedAt || 0));
+  const best = candidates[0];
+  if (best) {
+    state = normalize(best.s);
+    if (best.src && best.s !== ls) restoredFrom = best.src;
+  }
+  try { navigator.storage?.persist?.(); } catch {}
+}
+let saveTimer = null;
+function save() {
+  state.meta.updatedAt = Math.max(state.meta.updatedAt || 0, Date.now());
+  const json = JSON.stringify(state);
+  try {
+    const cur = localStorage.getItem(LS_KEY);
+    if (cur && cur !== json) localStorage.setItem(LS_PREV, cur);
+    localStorage.setItem(LS_KEY, json);
+    storageHealth.ls = 'ok';
+  } catch { storageHealth.ls = 'write failed'; }
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => mirror(json), 400);
+}
+async function mirror(json) {
+  try {
+    const snapKey = `snap:${keyOf(new Date())}`;
+    await idbPut([['current', JSON.parse(json)], [snapKey, JSON.parse(json)]]);
+    storageHealth.idb = 'ok';
+    const keys = (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort();
+    storageHealth.snaps = keys.length;
+    if (keys.length > SNAP_KEEP) await idbDelete(keys.slice(0, keys.length - SNAP_KEEP));
+  } catch { storageHealth.idb = 'write failed'; }
+}
+
+// ---------- export / import ----------
+function exportPayload() {
+  return JSON.stringify({ app: 'improvement-tracker', exportedAt: new Date().toISOString(), state }, null, 1);
+}
+function exportName() { return `improvement-tracker-${keyOf(new Date())}.json`; }
+function markExported() { state.settings.lastExport = Date.now(); save(); }
+async function doCopy() {
+  try { await navigator.clipboard.writeText(exportPayload()); markExported(); toast('Copied. Paste into Notes to keep it.'); render(); }
+  catch { toast('Copy failed. Try Share or Download.'); }
+}
+async function doShare() {
+  const file = new File([exportPayload()], exportName(), { type: 'application/json' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Improvement Tracker backup' });
+      markExported(); toast('Shared.'); render();
+    } else { doDownload(); }
+  } catch (e) { if (e && e.name !== 'AbortError') toast('Share failed. Try Download.'); }
+}
+function doDownload() {
+  const blob = new Blob([exportPayload()], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = exportName(); document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  markExported(); toast('Downloading.'); render();
+}
+function mergeImport(raw) {
+  const parsed = parseSafe(raw);
+  const inc = parsed && parsed.state ? parsed.state : parsed;
+  if (!inc || (!inc.days && !inc.urges)) throw new Error('not a tracker export');
+  const incoming = normalize(inc);
+  let daysMerged = 0, urgesMerged = 0;
+  for (const [k, v] of Object.entries(incoming.days)) {
+    const cur = state.days[k];
+    if (!cur || (v.u || 0) > (cur.u || 0)) { state.days[k] = v; daysMerged++; }
+  }
+  const ids = new Set(state.urges.map((u) => u.id));
+  for (const u of incoming.urges) if (!ids.has(u.id)) { state.urges.push(u); urgesMerged++; }
+  state.urges.sort((a, b) => new Date(a.at) - new Date(b.at));
+  if (!state.settings.lastExport && incoming.settings.lastExport) state.settings.lastExport = incoming.settings.lastExport;
+  save();
+  return { daysMerged, urgesMerged };
+}
+
+// ---------- rendering helpers ----------
+function toggleRow({ label, hint, checked, action, arg, warn }) {
+  return `<label class="row"><span class="label">${esc(label)}${hint ? `<span class="hint">${esc(hint)}</span>` : ''}</span>
+    <span class="switch${warn ? ' warn' : ''}"><input type="checkbox" data-action="${action}" data-arg="${esc(arg || '')}" ${checked ? 'checked' : ''}><span></span></span></label>`;
+}
+function checkRow({ label, hint, checked, action, arg }) {
+  return `<div class="row"><span class="label">${esc(label)}${hint ? `<span class="hint">${esc(hint)}</span>` : ''}</span>
+    <button class="check" type="button" data-action="${action}" data-arg="${esc(arg || '')}" aria-pressed="${checked}" aria-label="${esc(label)}">&#10003;</button></div>`;
+}
+function ratingRow({ label, value, arg }) {
+  return `<div class="row rating-row"><span class="label">${esc(label)}</span><div class="rating" role="group" aria-label="${esc(label)}">
+    ${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-action="rate" data-arg="${arg}:${n}" aria-pressed="${value === n}">${n}</button>`).join('')}
+  </div></div>`;
+}
+
+// ---------- Today ----------
+function renderToday() {
+  const key = todayKey();
+  const d = day(key);
+  const wd = weekdayOf(key);
+  const hour = new Date().getHours();
+  const nightFirst = hour >= 15 || hour < state.settings.rolloverHour;
+  const s = state.settings;
+
+  const morningDone = d.stretched && (!d.hungover || HANGOVER.every((h) => d.hangover[h.key]));
+  let morning = `<section class="card${morningDone ? ' done' : ''}"><div class="card-head"><h2>Morning</h2>${morningDone ? '<span class="badge">done</span>' : ''}</div>`;
+  morning += toggleRow({ label: 'Stretched', checked: d.stretched, action: 'day-bool', arg: 'stretched' });
+  if (s.hangoverDays.includes(wd)) {
+    morning += toggleRow({ label: 'Hungover?', hint: 'weekend mornings only', checked: d.hungover, action: 'day-bool', arg: 'hungover' });
+    if (d.hungover) {
+      morning += `<div class="sub-rows">` + HANGOVER.map((h) => checkRow({ label: h.label, checked: d.hangover[h.key], action: 'hangover', arg: h.key })).join('') + `</div>`;
+    }
+  }
+  morning += `</section>`;
+
+  let commit = '';
+  const rows = [];
+  if (s.waterPoloDays.includes(wd)) rows.push(checkRow({ label: 'Water polo', checked: d.waterPolo, action: 'day-bool', arg: 'waterPolo' }));
+  if (s.dinnerDays.includes(wd)) rows.push(checkRow({ label: 'Dinner out', checked: d.dinnerOut, action: 'day-bool', arg: 'dinnerOut' }));
+  rows.push(checkRow({ label: 'Gym', hint: 'log it when it happens', checked: d.gym, action: 'day-bool', arg: 'gym' }));
+  commit = `<section class="card"><div class="card-head"><h2>Commitments</h2></div>${rows.join('')}</section>`;
+
+  // night
+  const wdn = d.windDown;
+  const anyRating = RATINGS.some((r) => d.ratings[r.key] > 0);
+  const nightDone = wdn.done && anyRating;
+  let night = `<section class="card${nightDone ? ' done' : ''}"><div class="card-head"><h2>Night</h2>${nightDone ? '<span class="badge">done</span>' : ''}</div>`;
+  if (wdn.done) {
+    night += `<div class="row"><span class="label">Wind-down<span class="hint">15 minutes, done</span></span><button class="check" type="button" data-action="winddown-reset" aria-pressed="true" aria-label="Wind-down done, tap to reset">&#10003;</button></div>`;
+  } else if (wdn.endsAt) {
+    night += `<div class="timer-wrap"><div><div class="muted small">Wind-down</div><div class="timer" id="winddown-timer">${mmss(wdn.endsAt - Date.now())}</div></div>
+      <button class="btn" type="button" data-action="winddown-cancel">Cancel</button></div>`;
+  } else {
+    night += `<div class="row"><span class="label">Wind-down<span class="hint">phone down, wash up, mouth tape</span></span><button class="btn primary" type="button" data-action="winddown-start">Start 15:00</button></div>`;
+  }
+  night += `<h3 style="margin-top:10px">Slips</h3>`;
+  for (const l of LAPSES) {
+    night += toggleRow({ label: l.label, hint: l.hint, checked: d.lapses[l.key], action: 'lapse', arg: l.key, warn: true });
+    if (d.lapses[l.key]) {
+      night += `<div class="sub-rows"><textarea class="field" rows="1" data-action="lapse-note" data-arg="${l.key}" placeholder="What was happening right before?">${esc(d.lapseNotes[l.key])}</textarea></div>`;
+    }
+  }
+  night += `<h3 style="margin-top:14px">How I showed up</h3>`;
+  for (const r of RATINGS) night += ratingRow({ label: r.label, value: d.ratings[r.key], arg: r.key });
+  night += `<h3 style="margin-top:14px">One sentence</h3>
+    <textarea class="field" rows="2" data-action="note" placeholder="About today.">${esc(d.note)}</textarea>`;
+  night += `</section>`;
+
+  const pending = state.urges.filter((u) => !u.outcome);
+  let urges = '';
+  if (pending.length) {
+    urges = `<section class="card"><div class="card-head"><h2>Riding it out</h2></div>` + pending.map((u) => {
+      const left = new Date(u.endsAt).getTime() - Date.now();
+      const over = left <= 0;
+      return `<div class="timer-wrap"><div><div class="muted small">${u.kind === 'porn' ? 'Porn' : 'Scrolling'}${u.trigger ? ' · ' + esc(u.trigger) : ''}</div>
+        <div class="timer" data-timer="${u.id}" data-ends="${new Date(u.endsAt).getTime()}">${over ? 'time' : mmss(left)}</div></div></div>
+        <div class="btn-row">
+          <button class="btn primary" type="button" data-action="urge-outcome" data-arg="${u.id}:rode" ${over ? '' : 'disabled'}>Rode it out</button>
+          <button class="btn warn" type="button" data-action="urge-outcome" data-arg="${u.id}:gave">Gave in</button>
+        </div>
+        ${over ? '' : '<p class="muted small" style="margin-top:8px">Wait it out. Rode it out unlocks when the timer ends.</p>'}`;
+    }).join('<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">') + `</section>`;
+  }
+
+  const banner = restoredFrom ? `<div class="banner ok">Restored your data from the ${esc(restoredFrom)}. Consider making a backup in More.</div>` : '';
+  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">${nightFirst ? 'evening' : 'morning'}</span></div>`;
+  return header + banner + urges + (nightFirst ? night + commit + morning : morning + commit + night);
+}
+
+// ---------- Week ----------
+function weekKeys(start) { return Array.from({ length: 7 }, (_, i) => addDays(start, i)); }
+function weekStats(start) {
+  const today = todayKey();
+  const keys = weekKeys(start).filter((k) => k <= today);
+  const days = keys.map((k) => state.days[k]).filter(Boolean);
+  const n = keys.length;
+  const count = (fn) => keys.filter((k) => state.days[k] && fn(state.days[k])).length;
+  const urges = state.urges.filter((u) => { const k = urgeDayKey(u); return k >= start && k <= addDays(start, 6); });
+  const ratingAvg = (k) => { const vals = days.map((d) => d.ratings[k]).filter((v) => v > 0); return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null; };
+  const dayAvg = weekKeys(start).map((k) => {
+    const d = state.days[k]; if (!d) return null;
+    const vals = RATINGS.map((r) => d.ratings[r.key]).filter((v) => v > 0);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  });
+  return {
+    n, keys,
+    lapses: Object.fromEntries(LAPSES.map((l) => [l.key, count((d) => d.lapses[l.key])])),
+    stretched: count((d) => d.stretched), windDown: count((d) => d.windDown.done), gym: count((d) => d.gym),
+    waterPolo: count((d) => d.waterPolo), waterPoloPossible: keys.filter((k) => state.settings.waterPoloDays.includes(weekdayOf(k))).length,
+    dinner: count((d) => d.dinnerOut), dinnerPossible: keys.filter((k) => state.settings.dinnerDays.includes(weekdayOf(k))).length,
+    rode: urges.filter((u) => u.outcome === 'rode').length, gave: urges.filter((u) => u.outcome === 'gave').length,
+    ratingAvg: Object.fromEntries(RATINGS.map((r) => [r.key, ratingAvg(r.key)])), dayAvg,
+  };
+}
+function urgeDayKey(u) {
+  const d = new Date(u.at);
+  if (d.getHours() < state.settings.rolloverHour) d.setDate(d.getDate() - 1);
+  return keyOf(d);
+}
+function lastLapse(kind) {
+  const keys = Object.keys(state.days).filter((k) => state.days[k].lapses[kind]).sort();
+  return keys.length ? keys[keys.length - 1] : null;
+}
+function spark(vals) {
+  const w = 300, h = 64, padX = 12, padY = 10;
+  const pts = vals.map((v, i) => v == null ? null : [padX + (i * (w - 2 * padX)) / 6, h - padY - ((v - 1) / 4) * (h - 2 * padY)]);
+  const segs = []; let cur = [];
+  for (const p of pts) { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = []; } }
+  if (cur.length) segs.push(cur);
+  const paths = segs.filter((s) => s.length > 1).map((s) => `<path d="M${s.map((p) => p.map((x) => x.toFixed(1)).join(',')).join('L')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+  const dots = pts.filter(Boolean).map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>`).join('');
+  const grid = [1, 3, 5].map((v) => { const y = h - padY - ((v - 1) / 4) * (h - 2 * padY); return `<line x1="${padX}" x2="${w - padX}" y1="${y}" y2="${y}" stroke="var(--border)" stroke-width="1"/>`; }).join('');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${grid}${paths}${dots}</svg>`;
+}
+function renderWeek() {
+  const today = todayKey();
+  if (!weekCursor) weekCursor = weekStart(today);
+  const start = weekCursor, end = addDays(start, 6);
+  const cur = weekStats(start), prev = weekStats(addDays(start, -7));
+  const isThis = start === weekStart(today);
+  const title = `${fmtShort(start)} – ${fmtShort(end)}`;
+
+  const rate = (label, val, n, opts = {}) => {
+    const pct = n ? (val / n) * 100 : 0;
+    const cmp = opts.prev == null ? '' : `<span class="cmp">last week ${opts.prev}${opts.prevN != null ? ' of ' + opts.prevN : ''}</span>`;
+    return `<div class="stat"><div class="line"><span>${esc(label)}</span><span class="val">${val}${n != null ? ` <span class="muted">of ${n}</span>` : ''}</span></div>
+      ${n != null ? `<div class="bar${opts.warn ? ' warn' : ''}"><i style="width:${pct.toFixed(0)}%"></i></div>` : ''}${cmp}</div>`;
+  };
+
+  let out = `<div class="header"><h1>Week</h1><span class="sub">${isThis ? 'this week' : ''}</span></div>
+    <div class="weeknav"><button type="button" data-action="week-nav" data-arg="-1" aria-label="Previous week">&#8249;</button><strong>${title}</strong>
+    <button type="button" data-action="week-nav" data-arg="1" aria-label="Next week" ${isThis ? 'disabled' : ''}>&#8250;</button></div>`;
+
+  const needBackup = backupDue();
+  if (needBackup) out += `<div class="banner">No backup in ${needBackup} days. Make one in More, it takes ten seconds.</div>`;
+
+  if (cur.n === 0) return out + `<section class="card"><p class="muted">Nothing logged yet for this week.</p></section>`;
+
+  out += `<section class="card"><div class="card-head"><h2>Slips</h2><span class="muted small">days out of ${cur.n}</span></div>`;
+  for (const l of LAPSES) out += rate(l.label, cur.lapses[l.key], cur.n, { warn: true, prev: prev.n ? prev.lapses[l.key] : null, prevN: prev.n || null });
+  out += `<div class="stat"><div class="line"><span>Urges ridden out</span><span class="val">${cur.rode} <span class="muted">rode</span> · ${cur.gave} <span class="muted">gave in</span></span></div>
+    ${prev.n ? `<span class="cmp">last week ${prev.rode} rode · ${prev.gave} gave in</span>` : ''}</div>`;
+  const lp = lastLapse('porn');
+  const since = lp ? Math.round((dateOf(today) - dateOf(lp)) / 86400000) : null;
+  out += `<p class="muted small" style="margin-top:10px">${lp ? `Last porn slip logged ${since === 0 ? 'today' : since + (since === 1 ? ' day ago' : ' days ago')}.` : 'No porn slips logged yet.'}</p></section>`;
+
+  out += `<section class="card"><div class="card-head"><h2>How I showed up</h2></div>${spark(cur.dayAvg)}
+    <div class="spark-days">${weekKeys(start).map((k, i) => `<span>${DAY_NAMES[weekdayOf(k)]}<b>${cur.dayAvg[i] == null ? '·' : cur.dayAvg[i].toFixed(1)}</b></span>`).join('')}</div>`;
+  for (const r of RATINGS) {
+    const v = cur.ratingAvg[r.key], p = prev.ratingAvg[r.key];
+    out += `<div class="stat"><div class="line"><span>${esc(r.label)}</span><span class="val">${v == null ? '<span class="muted">–</span>' : v.toFixed(1)}</span></div>
+      ${p != null ? `<span class="cmp">last week ${p.toFixed(1)}</span>` : ''}</div>`;
+  }
+  out += `</section>`;
+
+  out += `<section class="card"><div class="card-head"><h2>Routines</h2></div>`;
+  out += rate('Stretched', cur.stretched, cur.n, { prev: prev.n ? prev.stretched : null, prevN: prev.n || null });
+  out += rate('Wind-down done', cur.windDown, cur.n, { prev: prev.n ? prev.windDown : null, prevN: prev.n || null });
+  out += rate('Gym', cur.gym, null, { prev: prev.n ? prev.gym : null });
+  if (cur.waterPoloPossible) out += rate('Water polo', cur.waterPolo, cur.waterPoloPossible);
+  if (cur.dinnerPossible) out += rate('Dinner out', cur.dinner, cur.dinnerPossible);
+  out += `</section>`;
+
+  const entries = cur.keys.slice().reverse().map((k) => {
+    const d = state.days[k]; if (!d) return '';
+    const notes = LAPSES.filter((l) => d.lapses[l.key] && d.lapseNotes[l.key]).map((l) => `<div class="q">before ${l.key === 'scroll' ? 'scrolling' : l.key === 'nag' ? 'nagging' : 'porn'}: <b>${esc(d.lapseNotes[l.key])}</b></div>`).join('');
+    if (!d.note && !notes) return '';
+    return `<div class="entry"><div class="d">${esc(fmtLong(k))}</div>${d.note ? `<div>${esc(d.note)}</div>` : ''}${notes}</div>`;
+  }).join('');
+  out += `<section class="card"><div class="card-head"><h2>Journal</h2></div>${entries || '<p class="muted">No sentences yet this week.</p>'}</section>`;
+  return out;
+}
+function backupDue() {
+  const daysLogged = Object.keys(state.days).length;
+  if (daysLogged < 3) return 0;
+  const last = state.settings.lastExport || state.meta.createdAt || Date.now();
+  const days = Math.floor((Date.now() - last) / 86400000);
+  return days >= 7 ? days : 0;
+}
+
+// ---------- More ----------
+function renderMore() {
+  const s = state.settings;
+  const last = s.lastExport ? new Date(s.lastExport) : null;
+  const daysLogged = Object.keys(state.days).length;
+  const chips = (label, arr, action) => `<div class="row" style="display:block"><span class="label">${label}</span><div class="daychips">${[1, 2, 3, 4, 5, 6, 0].map((wd) => `<button type="button" data-action="${action}" data-arg="${wd}" aria-pressed="${arr.includes(wd)}">${DAY_NAMES[wd]}</button>`).join('')}</div></div>`;
+  return `<div class="header"><h1>More</h1></div>
+  <section class="card"><div class="card-head"><h2>Backup</h2></div>
+    <p class="muted small">Everything lives only on this device. A backup is a file you keep somewhere you control, like Notes or Files. Nothing is uploaded by this app.</p>
+    <div class="kv" style="margin-top:8px"><span>Last backup</span><span>${last ? `${fmtLong(keyOf(last))}` : 'never'}</span></div>
+    <div class="kv"><span>Days logged</span><span>${daysLogged}</span></div>
+    <div class="btn-row"><button class="btn primary" type="button" data-action="share">Share file</button><button class="btn" type="button" data-action="copy">Copy text</button></div>
+    <div class="btn-row"><button class="btn" type="button" data-action="download">Download file</button></div>
+  </section>
+  <section class="card"><div class="card-head"><h2>Restore</h2></div>
+    <p class="muted small">Merges a backup into what is here. Newer entries win, nothing is deleted.</p>
+    <div class="btn-row"><label class="btn block" for="import-file">Choose backup file</label><input id="import-file" class="sr" type="file" accept="application/json,.json,text/plain" data-action="import-file"></div>
+    <textarea class="field" id="import-text" rows="2" placeholder="Or paste backup text here"></textarea>
+    <div class="btn-row"><button class="btn" type="button" data-action="import-text">Merge pasted text</button></div>
+  </section>
+  <section class="card"><div class="card-head"><h2>Storage health</h2></div>
+    <div class="kv"><span>Primary store</span><span>${esc(storageHealth.ls)}</span></div>
+    <div class="kv"><span>Backup mirror</span><span>${esc(storageHealth.idb)}</span></div>
+    <div class="kv"><span>Daily snapshots kept</span><span>${storageHealth.snaps}</span></div>
+    <p class="muted small" style="margin-top:8px">Two independent stores on the device plus a previous-save copy. If one is lost the app restores from another on next open. Still, keep a backup file.</p>
+  </section>
+  <section class="card"><div class="card-head"><h2>Schedule</h2></div>
+    ${chips('Hangover prompt days', s.hangoverDays, 'set-hangover')}
+    ${chips('Water polo days', s.waterPoloDays, 'set-waterpolo')}
+    ${chips('Dinner out days', s.dinnerDays, 'set-dinner')}
+    <div class="row"><span class="label">Day ends at<span class="hint">late nights count toward the day before</span></span>
+      <select class="field" data-action="rollover">${[0, 1, 2, 3, 4, 5, 6].map((h) => `<option value="${h}" ${s.rolloverHour === h ? 'selected' : ''}>${h === 0 ? 'midnight' : h + ' am'}</option>`).join('')}</select></div>
+  </section>
+  <section class="card"><div class="card-head"><h2>Reminders</h2></div>
+    <p class="muted small">This app never sends notifications. To get nudged, add a Shortcuts automation: at 9:00 am and 10:00 pm, Open App → Improve. Or set two plain alarms called "check in".</p>
+  </section>`;
+}
+
+// ---------- urge sheet ----------
+let sheetKind = 'scroll';
+function openSheet() {
+  sheetKind = 'scroll';
+  const el = $('#sheet');
+  el.innerHTML = `<div class="sheet-inner" role="dialog" aria-label="Log an urge">
+    <h2>What is pulling?</h2>
+    <div class="choice"><button type="button" data-action="sheet-kind" data-arg="scroll" aria-pressed="true">Scrolling</button><button type="button" data-action="sheet-kind" data-arg="porn" aria-pressed="false">Porn</button></div>
+    <input class="field" id="sheet-trigger" placeholder="Trigger, two words (bored, tired, alone)">
+    <div class="btn-row"><button class="btn" type="button" data-action="sheet-close">Cancel</button><button class="btn primary" type="button" data-action="sheet-start">Start 10 minutes</button></div>
+  </div>`;
+  el.hidden = false;
+  setTimeout(() => $('#sheet-trigger')?.focus(), 50);
+}
+function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
+
+// ---------- toast ----------
+let toastTimer = null;
+function toast(msg) {
+  const el = $('#toast'); el.textContent = msg; el.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2200);
+}
+
+// ---------- render ----------
+function render() {
+  const view = $('#view');
+  const scrollY = window.scrollY;
+  view.innerHTML = tab === 'today' ? renderToday() : tab === 'week' ? renderWeek() : renderMore();
+  document.querySelectorAll('.tab').forEach((b) => { if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  const pending = state.urges.some((u) => !u.outcome);
+  const ub = $('.urge-btn');
+  ub.textContent = pending ? 'Riding it out…' : 'I feel an urge';
+  ub.classList.toggle('urge-active', pending);
+  $('#urgebar').hidden = tab !== 'today';
+  window.scrollTo(0, scrollY);
+  ensureTick();
+  autosize();
+}
+function autosize() {
+  document.querySelectorAll('textarea.field').forEach((t) => { t.style.height = 'auto'; t.style.height = Math.max(44, t.scrollHeight) + 'px'; });
+}
+function ensureTick() {
+  const active = (day().windDown.endsAt && !day().windDown.done) || state.urges.some((u) => !u.outcome && new Date(u.endsAt).getTime() > Date.now());
+  if (active && !tickHandle) tickHandle = setInterval(tick, 1000);
+  if (!active && tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+}
+function tick() {
+  const d = day();
+  if (d.windDown.endsAt && !d.windDown.done) {
+    const left = d.windDown.endsAt - Date.now();
+    if (left <= 0) { d.windDown.done = true; d.windDown.endsAt = null; touch(); save(); toast('Wind-down complete.'); render(); return; }
+    const el = $('#winddown-timer'); if (el) el.textContent = mmss(left);
+  }
+  let rerender = false;
+  document.querySelectorAll('[data-timer]').forEach((el) => {
+    const left = Number(el.dataset.ends) - Date.now();
+    if (left <= 0) rerender = true; else el.textContent = mmss(left);
+  });
+  if (rerender) render();
+  ensureTick();
+}
+
+// ---------- events ----------
+function setDays(arrName, wd) {
+  const arr = state.settings[arrName];
+  const i = arr.indexOf(wd);
+  if (i >= 0) arr.splice(i, 1); else arr.push(wd);
+  save(); render();
+}
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-action],[data-tab]');
+  if (!t) return;
+  if (t.dataset.tab) { tab = t.dataset.tab; if (tab === 'week') weekCursor = weekStart(todayKey()); render(); window.scrollTo(0, 0); return; }
+  const a = t.dataset.action, arg = t.dataset.arg;
+  const d = day();
+  switch (a) {
+    case 'day-bool': if (t.tagName === 'BUTTON') { d[arg] = !d[arg]; touch(); save(); render(); } break;
+    case 'hangover': d.hangover[arg] = !d.hangover[arg]; touch(); save(); render(); break;
+    case 'rate': { const [k, n] = arg.split(':'); d.ratings[k] = d.ratings[k] === Number(n) ? 0 : Number(n); touch(); save(); render(); break; }
+    case 'winddown-start': d.windDown.endsAt = Date.now() + WIND_DOWN_MIN * 60000; d.windDown.done = false; touch(); save(); render(); break;
+    case 'winddown-cancel': d.windDown.endsAt = null; touch(); save(); render(); break;
+    case 'winddown-reset': d.windDown.done = false; touch(); save(); render(); break;
+    case 'urge-open': openSheet(); break;
+    case 'sheet-close': closeSheet(); break;
+    case 'sheet-kind': sheetKind = arg; document.querySelectorAll('[data-action="sheet-kind"]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.arg === arg)); break;
+    case 'sheet-start': {
+      const trigger = ($('#sheet-trigger')?.value || '').trim().slice(0, 80);
+      const now = Date.now();
+      state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: sheetKind, trigger, endsAt: new Date(now + URGE_MIN * 60000).toISOString(), outcome: null });
+      state.meta.updatedAt = now; save(); closeSheet(); tab = 'today'; render(); window.scrollTo(0, 0); break;
+    }
+    case 'urge-outcome': {
+      const [id, outcome] = arg.split(':');
+      const u = state.urges.find((x) => x.id === id);
+      if (u) { u.outcome = outcome; u.resolvedAt = new Date().toISOString(); state.meta.updatedAt = Date.now(); save(); toast(outcome === 'rode' ? 'That counts.' : 'Logged. Tomorrow is a new day.'); render(); }
+      break;
+    }
+    case 'week-nav': weekCursor = addDays(weekCursor, 7 * Number(arg)); render(); window.scrollTo(0, 0); break;
+    case 'share': doShare(); break;
+    case 'copy': doCopy(); break;
+    case 'download': doDownload(); break;
+    case 'import-text': {
+      const txt = $('#import-text')?.value || '';
+      try { const r = mergeImport(txt); toast(`Merged ${r.daysMerged} days, ${r.urgesMerged} urges.`); render(); }
+      catch { toast('That does not look like a backup.'); }
+      break;
+    }
+    case 'set-hangover': setDays('hangoverDays', Number(arg)); break;
+    case 'set-waterpolo': setDays('waterPoloDays', Number(arg)); break;
+    case 'set-dinner': setDays('dinnerDays', Number(arg)); break;
+  }
+});
+document.addEventListener('change', (e) => {
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const a = t.dataset.action, arg = t.dataset.arg;
+  const d = day();
+  if (a === 'day-bool' && t.type === 'checkbox') { d[arg] = t.checked; if (arg === 'hungover' && !t.checked) HANGOVER.forEach((h) => d.hangover[h.key] = false); touch(); save(); render(); }
+  else if (a === 'lapse') { d.lapses[arg] = t.checked; touch(); save(); render(); }
+  else if (a === 'rollover') { state.settings.rolloverHour = Number(t.value); save(); render(); }
+  else if (a === 'import-file') {
+    const f = t.files && t.files[0]; if (!f) return;
+    f.text().then((txt) => { try { const r = mergeImport(txt); toast(`Merged ${r.daysMerged} days, ${r.urgesMerged} urges.`); render(); } catch { toast('That does not look like a backup.'); } });
+  }
+});
+let noteTimer = null;
+document.addEventListener('input', (e) => {
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const a = t.dataset.action, arg = t.dataset.arg;
+  if (a === 'note' || a === 'lapse-note') {
+    const d = day();
+    if (a === 'note') d.note = t.value; else d.lapseNotes[arg] = t.value;
+    touch();
+    t.style.height = 'auto'; t.style.height = Math.max(44, t.scrollHeight) + 'px';
+    clearTimeout(noteTimer); noteTimer = setTimeout(save, 300);
+  }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
+$('#sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeSheet(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); else { clearTimeout(noteTimer); save(); } });
+window.addEventListener('pagehide', () => { clearTimeout(noteTimer); save(); });
+
+// ---------- boot ----------
+loadState().then(() => {
+  render();
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+});
+})();

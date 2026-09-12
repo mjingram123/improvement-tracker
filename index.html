@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Improvement Tracker</title>
+<meta name="description" content="Private, on-device habit and reflection tracker.">
+<meta name="theme-color" content="#f4f4f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101211" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Improve">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app" class="app">
+  <main id="view" class="view" aria-live="polite"></main>
+  <div id="urgebar" class="urgebar">
+    <button class="urge-btn" data-action="urge-open" type="button">I feel an urge</button>
+  </div>
+  <nav class="tabs" aria-label="Sections">
+    <button class="tab" data-tab="today" type="button">Today</button>
+    <button class="tab" data-tab="week" type="button">Week</button>
+    <button class="tab" data-tab="more" type="button">More</button>
+  </nav>
+  <div id="sheet" class="sheet" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
