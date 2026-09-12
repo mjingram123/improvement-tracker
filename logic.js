@@ -169,11 +169,19 @@
     return days >= 7 ? days : 0;
   }
 
+  // ---------- tab bar ----------
+  // Night after 15:00, or before the day's rollover hour (late-night use); Day otherwise.
+  function defaultTab(now, rolloverHour) {
+    const h = now.getHours();
+    return (h >= 15 || h < rolloverHour) ? 'night' : 'day';
+  }
+
   return {
     LAPSES, RATINGS, HANGOVER, DAY_NAMES, MONTHS,
     pad, keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
     todayKeyFor, urgeDayKeyFor,
     defaultState, defaultDay, normalize,
     weekStats, lastLapse, mergeInto, backupDueDays,
+    defaultTab,
   };
 });

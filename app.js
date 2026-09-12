@@ -8,6 +8,7 @@ const {
   keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
   todayKeyFor, defaultState, defaultDay, normalize,
   weekStats: weekStatsPure, lastLapse: lastLapsePure, mergeInto, backupDueDays,
+  defaultTab,
 } = window.ITLogic;
 
 // ---------- constants ----------
@@ -29,7 +30,7 @@ function weekKeys(start) { return Array.from({ length: 7 }, (_, i) => addDays(st
 
 // ---------- state ----------
 let state = defaultState();
-let tab = 'today';
+let tab = 'day';
 let weekCursor = null; // week start key being viewed
 let restoredFrom = null;
 let storageHealth = { ls: 'unknown', idb: 'unknown', snaps: 0 };
@@ -200,13 +201,11 @@ function renderOnboarding() {
     <div class="btn-row"><button class="btn" type="button" data-action="onboard-done">Done, hide this</button></div></section>`;
 }
 
-// ---------- Today ----------
-function renderToday() {
+// ---------- Day ----------
+function renderDay() {
   const key = todayKey();
   const d = day(key);
   const wd = weekdayOf(key);
-  const hour = new Date().getHours();
-  const nightFirst = hour >= 15 || hour < state.settings.rolloverHour;
   const s = state.settings;
 
   const morningDone = d.stretched && (!d.hungover || HANGOVER.every((h) => d.hangover[h.key]));
@@ -220,17 +219,44 @@ function renderToday() {
   }
   morning += `</section>`;
 
-  let commit = '';
   const rows = [];
   if (s.waterPoloDays.includes(wd)) rows.push(checkRow({ label: 'Water polo', checked: d.waterPolo, action: 'day-bool', arg: 'waterPolo' }));
   if (s.dinnerDays.includes(wd)) rows.push(checkRow({ label: 'Dinner out', checked: d.dinnerOut, action: 'day-bool', arg: 'dinnerOut' }));
   rows.push(checkRow({ label: 'Gym', hint: 'log it when it happens', checked: d.gym, action: 'day-bool', arg: 'gym' }));
-  commit = `<section class="card"><div class="card-head"><h2>Commitments</h2></div>${rows.join('')}</section>`;
+  const commit = `<section class="card"><div class="card-head"><h2>Commitments</h2></div>${rows.join('')}</section>`;
 
-  // night
+  const pending = state.urges.filter((u) => !u.outcome);
+  let urges = '';
+  if (pending.length) {
+    urges = `<section class="card"><div class="card-head"><h2>Riding it out</h2></div>` + pending.map((u) => {
+      const left = new Date(u.endsAt).getTime() - Date.now();
+      const over = left <= 0;
+      return `<div class="timer-wrap"><div><div class="muted small">${u.kind === 'porn' ? 'Porn' : 'Scrolling'}${u.trigger ? ' · ' + esc(u.trigger) : ''}</div>
+        <div class="timer" data-timer="${u.id}" data-ends="${new Date(u.endsAt).getTime()}">${over ? 'time' : mmss(left)}</div></div></div>
+        <div class="btn-row">
+          <button class="btn primary" type="button" data-action="urge-outcome" data-arg="${u.id}:rode" ${over ? '' : 'disabled'}>Rode it out</button>
+          <button class="btn warn" type="button" data-action="urge-outcome" data-arg="${u.id}:gave">Gave in</button>
+        </div>
+        ${over ? '' : '<p class="muted small" style="margin-top:8px">Wait it out. Rode it out unlocks when the timer ends.</p>'}`;
+    }).join('<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">') + `</section>`;
+  }
+
+  const onboarding = renderOnboarding();
+  const banner = restoredFrom ? `<div class="banner ok">Restored your data from the ${esc(restoredFrom)}. Consider making a backup in More.</div>` : '';
+  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">morning</span></div>`;
+  return onboarding + header + banner + urges + morning + commit;
+}
+
+// ---------- Night ----------
+function renderNight() {
+  const key = todayKey();
+  const d = day(key);
+  const s = state.settings;
   const wdn = d.windDown;
   const anyRating = RATINGS.some((r) => d.ratings[r.key] > 0);
   const nightDone = wdn.done || anyRating || d.note.trim().length > 0;
+
+  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">evening</span></div>`;
   let night = `<section class="card${nightDone ? ' done' : ''}"><div class="card-head"><h2>Night</h2>${nightDone ? '<span class="badge">done</span>' : ''}</div>`;
   if (wdn.done) {
     night += `<div class="row"><span class="label">Wind-down<span class="hint">15 minutes, done</span></span><button class="check" type="button" data-action="winddown-reset" aria-pressed="true" aria-label="Wind-down done, tap to reset">&#10003;</button></div>`;
@@ -253,27 +279,7 @@ function renderToday() {
   night += `<h3 style="margin-top:14px">One sentence</h3>
     <textarea class="field" rows="2" data-action="note" placeholder="About today.">${esc(d.note)}</textarea>`;
   night += `</section>`;
-
-  const pending = state.urges.filter((u) => !u.outcome);
-  let urges = '';
-  if (pending.length) {
-    urges = `<section class="card"><div class="card-head"><h2>Riding it out</h2></div>` + pending.map((u) => {
-      const left = new Date(u.endsAt).getTime() - Date.now();
-      const over = left <= 0;
-      return `<div class="timer-wrap"><div><div class="muted small">${u.kind === 'porn' ? 'Porn' : 'Scrolling'}${u.trigger ? ' · ' + esc(u.trigger) : ''}</div>
-        <div class="timer" data-timer="${u.id}" data-ends="${new Date(u.endsAt).getTime()}">${over ? 'time' : mmss(left)}</div></div></div>
-        <div class="btn-row">
-          <button class="btn primary" type="button" data-action="urge-outcome" data-arg="${u.id}:rode" ${over ? '' : 'disabled'}>Rode it out</button>
-          <button class="btn warn" type="button" data-action="urge-outcome" data-arg="${u.id}:gave">Gave in</button>
-        </div>
-        ${over ? '' : '<p class="muted small" style="margin-top:8px">Wait it out. Rode it out unlocks when the timer ends.</p>'}`;
-    }).join('<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">') + `</section>`;
-  }
-
-  const onboarding = renderOnboarding();
-  const banner = restoredFrom ? `<div class="banner ok">Restored your data from the ${esc(restoredFrom)}. Consider making a backup in More.</div>` : '';
-  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">${nightFirst ? 'evening' : 'morning'}</span></div>`;
-  return onboarding + header + banner + urges + (nightFirst ? night + commit + morning : morning + commit + night);
+  return header + night;
 }
 
 // ---------- Week ----------
@@ -417,13 +423,13 @@ function toast(msg) {
 function render() {
   const view = $('#view');
   const scrollY = window.scrollY;
-  view.innerHTML = tab === 'today' ? renderToday() : tab === 'week' ? renderWeek() : renderMore();
+  view.innerHTML = tab === 'day' ? renderDay() : tab === 'week' ? renderWeek() : tab === 'night' ? renderNight() : renderMore();
   document.querySelectorAll('.tab').forEach((b) => { if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   const pending = state.urges.some((u) => !u.outcome);
   const ub = $('.urge-btn');
   ub.textContent = pending ? 'Riding it out…' : 'I feel an urge';
   ub.classList.toggle('urge-active', pending);
-  $('#urgebar').hidden = tab !== 'today';
+  $('#urgebar').hidden = tab !== 'day';
   window.scrollTo(0, scrollY);
   ensureTick();
   autosize();
@@ -479,7 +485,7 @@ document.addEventListener('click', (e) => {
       const trigger = ($('#sheet-trigger')?.value || '').trim().slice(0, 80);
       const now = Date.now();
       state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: sheetKind, trigger, endsAt: new Date(now + URGE_MIN * 60000).toISOString(), outcome: null });
-      state.meta.updatedAt = now; save(); closeSheet(); tab = 'today'; render(); window.scrollTo(0, 0); break;
+      state.meta.updatedAt = now; save(); closeSheet(); tab = 'day'; render(); window.scrollTo(0, 0); break;
     }
     case 'urge-outcome': {
       const [id, outcome] = arg.split(':');
@@ -538,6 +544,8 @@ window.addEventListener('pagehide', () => { clearTimeout(noteTimer); save(); cle
 
 // ---------- boot ----------
 loadState().then(() => {
+  tab = defaultTab(new Date(), state.settings.rolloverHour);
+  if (tab === 'week') weekCursor = weekStart(todayKey());
   render();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

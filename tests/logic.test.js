@@ -153,6 +153,21 @@ test('mergeInto: junk text throws', () => {
   assert.throws(() => L.mergeInto(s, ''));
 });
 
+// ---------- defaultTab ----------
+test('defaultTab: before rollover hour is night', () => {
+  const now = new Date(2026, 8, 12, 2, 0, 0);
+  assert.equal(L.defaultTab(now, 4), 'night');
+});
+test('defaultTab: at or after 15:00 is night', () => {
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 15, 0, 0), 4), 'night');
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 21, 0, 0), 4), 'night');
+});
+test('defaultTab: between rollover hour and 15:00 is day', () => {
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 4, 0, 0), 4), 'day');
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 9, 30, 0), 4), 'day');
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 14, 59, 0), 4), 'day');
+});
+
 // ---------- backupDueDays ----------
 test('backupDueDays: returns 0 with fewer than 3 logged days', () => {
   const s = makeState();
