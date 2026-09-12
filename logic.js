@@ -198,6 +198,19 @@
     return 0;
   }
 
+  // ---------- urges ----------
+  function recentUrges(state, n) {
+    return state.urges.slice().sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, n);
+  }
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    let h = d.getHours();
+    const m = pad(d.getMinutes());
+    const ap = h >= 12 ? 'pm' : 'am';
+    h = h % 12; if (h === 0) h = 12;
+    return `${h}:${m}${ap}`;
+  }
+
   return {
     LAPSES, RATINGS, HANGOVER, DAY_NAMES, MONTHS,
     pad, keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
@@ -205,5 +218,6 @@
     defaultState, defaultDay, normalize,
     weekStats, lastLapse, mergeInto, backupDueDays,
     defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
+    recentUrges, fmtTime,
   };
 });

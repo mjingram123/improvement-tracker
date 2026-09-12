@@ -158,13 +158,18 @@ textarea.field { min-height: 44px; }
 .tab { flex: 1; border: none; background: transparent; color: var(--muted); font-weight: 600; font-size: 14px; }
 .tab[aria-current="page"] { color: var(--accent); }
 
-/* sheet */
-.sheet {
-  position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; z-index: 20;
+/* urge overlay: full-screen, covers the tab bar and floating button */
+.overlay {
+  position: fixed; inset: 0; background: var(--bg); z-index: 50; overflow-y: auto;
 }
-.sheet-inner {
-  width: 100%; max-width: 540px; margin: 0 auto; background: var(--card); border-radius: 20px 20px 0 0;
-  padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+.overlay-inner {
+  max-width: 540px; margin: 0 auto; min-height: 100%; position: relative;
+  padding: calc(52px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+}
+.overlay-close {
+  position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px;
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: var(--card2);
+  font-size: 20px; line-height: 1; display: grid; place-items: center; padding: 0;
 }
 .choice { display: flex; gap: 10px; margin: 12px 0; }
 .choice button { flex: 1; min-height: 52px; border-radius: 12px; border: 2px solid var(--border); background: var(--card2); font-weight: 600; }

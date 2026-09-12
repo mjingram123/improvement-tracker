@@ -228,6 +228,30 @@ test('firstIncompleteNightStep: falls back to 0 when every step is already compl
   assert.equal(L.firstIncompleteNightStep(d, [true, true, true, true]), 0);
 });
 
+// ---------- recentUrges / fmtTime ----------
+test('recentUrges: returns the newest n urges, most recent first', () => {
+  const s = makeState();
+  s.urges = [
+    { id: 'a', at: '2026-09-07T10:00:00.000Z' },
+    { id: 'b', at: '2026-09-09T10:00:00.000Z' },
+    { id: 'c', at: '2026-09-08T10:00:00.000Z' },
+  ];
+  const out = L.recentUrges(s, 2);
+  assert.deepEqual(out.map((u) => u.id), ['b', 'c']);
+});
+test('recentUrges: n larger than the list returns everything, still sorted', () => {
+  const s = makeState();
+  s.urges = [{ id: 'old', at: '2026-09-01T00:00:00.000Z' }, { id: 'new', at: '2026-09-05T00:00:00.000Z' }];
+  const out = L.recentUrges(s, 5);
+  assert.deepEqual(out.map((u) => u.id), ['new', 'old']);
+});
+test('fmtTime: formats local hours/minutes with am/pm, including noon and midnight', () => {
+  assert.equal(L.fmtTime(new Date(2026, 8, 7, 0, 5)), '12:05am');
+  assert.equal(L.fmtTime(new Date(2026, 8, 7, 9, 3)), '9:03am');
+  assert.equal(L.fmtTime(new Date(2026, 8, 7, 12, 0)), '12:00pm');
+  assert.equal(L.fmtTime(new Date(2026, 8, 7, 23, 45)), '11:45pm');
+});
+
 // ---------- backupDueDays ----------
 test('backupDueDays: returns 0 with fewer than 3 logged days', () => {
   const s = makeState();
