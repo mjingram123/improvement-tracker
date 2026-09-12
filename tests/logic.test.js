@@ -280,6 +280,30 @@ test('backupDueDays: returns 0 with 3+ logged days but a recent export', () => {
   assert.equal(L.backupDueDays(s, now), 0);
 });
 
+// ---------- fmtHour12 / dayEndOptions ----------
+test('fmtHour12: midnight, noon, and regular hours', () => {
+  assert.equal(L.fmtHour12(0), '12 am');
+  assert.equal(L.fmtHour12(2), '2 am');
+  assert.equal(L.fmtHour12(4), '4 am');
+  assert.equal(L.fmtHour12(6), '6 am');
+  assert.equal(L.fmtHour12(12), '12 pm');
+  assert.equal(L.fmtHour12(13), '1 pm');
+  assert.equal(L.fmtHour12(23), '11 pm');
+});
+test('dayEndOptions: default hours when rolloverHour is one of the four options', () => {
+  const opts = L.dayEndOptions(4);
+  assert.deepEqual(opts.map((o) => o.hour), [0, 2, 4, 6]);
+  assert.deepEqual(opts.map((o) => o.label), ['12 am', '2 am', '4 am', '6 am']);
+});
+test('dayEndOptions: an off-menu saved hour is added, sorted, and kept', () => {
+  const opts = L.dayEndOptions(3);
+  assert.deepEqual(opts.map((o) => o.hour), [0, 2, 3, 4, 6]);
+  assert.equal(opts.find((o) => o.hour === 3).label, '3 am');
+});
+test('dayEndOptions: an off-menu hour past 6 sorts to the end', () => {
+  const opts = L.dayEndOptions(1);
+  assert.deepEqual(opts.map((o) => o.hour), [0, 1, 2, 4, 6]);
+});
 test('weekStats.logged counts only days with data', () => {
   const st = L.defaultState();
   st.days['2026-09-08'] = L.defaultDay();

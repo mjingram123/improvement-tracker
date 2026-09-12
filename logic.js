@@ -198,6 +198,20 @@
     return 0;
   }
 
+  // ---------- schedule / more ----------
+  // 12-hour label for an hour-of-day integer, e.g. 0 -> "12 am", 13 -> "1 pm".
+  function fmtHour12(h) {
+    const ap = h < 12 ? 'am' : 'pm';
+    let hh = h % 12; if (hh === 0) hh = 12;
+    return `${hh} ${ap}`;
+  }
+  // The "Day ends at" segmented control shows 12/2/4/6 am by default; if the saved
+  // rolloverHour is some other value, that value is kept in the list (sorted), selected.
+  function dayEndOptions(rolloverHour) {
+    const base = [0, 2, 4, 6];
+    const hours = base.includes(rolloverHour) ? base.slice() : base.concat([rolloverHour]).sort((a, b) => a - b);
+    return hours.map((h) => ({ hour: h, label: fmtHour12(h) }));
+  }
   // ---------- urges ----------
   function recentUrges(state, n) {
     return state.urges.slice().sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, n);
@@ -218,6 +232,6 @@
     defaultState, defaultDay, normalize,
     weekStats, lastLapse, mergeInto, backupDueDays,
     defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
-    recentUrges, fmtTime,
+    recentUrges, fmtTime, fmtHour12, dayEndOptions,
   };
 });
