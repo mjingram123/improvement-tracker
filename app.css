@@ -92,16 +92,26 @@ p { margin: 0; }
 .check {
   flex: none; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border);
   background: transparent; display: grid; place-items: center; color: transparent; padding: 0;
+  position: relative;
 }
 .check[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.check::after {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
+}
 
 /* rating */
 .rating { display: flex; gap: 6px; }
 .rating button {
   width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--card2); color: var(--muted); font-weight: 600;
+  position: relative;
 }
 .rating button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rating button::after {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
+}
 .rating-row { display: block; }
 .rating-row .label { display: block; margin-bottom: 8px; }
 
@@ -181,6 +191,10 @@ textarea.field { min-height: 44px; }
   width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: var(--card2);
   font-size: 20px; line-height: 1; display: grid; place-items: center; padding: 0;
 }
+.overlay-close::after {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
+}
 .choice { display: flex; gap: 10px; margin: 12px 0; }
 .choice button { flex: 1; min-height: 52px; border-radius: 12px; border: 2px solid var(--border); background: var(--card2); font-weight: 600; }
 .choice button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
@@ -195,7 +209,11 @@ textarea.field { min-height: 44px; }
 
 /* week */
 .weeknav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.weeknav button { min-width: 44px; min-height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); }
+.weeknav button { min-width: 44px; min-height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); position: relative; }
+.weeknav button::after {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
+}
 .stat { padding: 9px 0; border-top: 1px solid var(--border); }
 .stat:first-of-type { border-top: none; }
 .stat .line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
@@ -217,7 +235,11 @@ textarea.field { min-height: 44px; }
 .kv { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--border); font-size: 14px; }
 .kv:first-of-type { border-top: none; }
 .daychips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.daychips button { min-width: 42px; min-height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--card2); font-size: 13px; }
+.daychips button { min-width: 42px; min-height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--card2); font-size: 13px; position: relative; }
+.daychips button::after {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
+}
 .daychips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 select.field { margin-top: 0; width: auto; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
