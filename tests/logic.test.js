@@ -153,6 +153,105 @@ test('mergeInto: junk text throws', () => {
   assert.throws(() => L.mergeInto(s, ''));
 });
 
+// ---------- defaultTab ----------
+test('defaultTab: before rollover hour is night', () => {
+  const now = new Date(2026, 8, 12, 2, 0, 0);
+  assert.equal(L.defaultTab(now, 4), 'night');
+});
+test('defaultTab: at or after 15:00 is night', () => {
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 15, 0, 0), 4), 'night');
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 21, 0, 0), 4), 'night');
+});
+test('defaultTab: between rollover hour and 15:00 is day', () => {
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 4, 0, 0), 4), 'day');
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 9, 30, 0), 4), 'day');
+  assert.equal(L.defaultTab(new Date(2026, 8, 12, 14, 59, 0), 4), 'day');
+});
+
+// ---------- night flow ----------
+test('nightCardDone: false with nothing filled in', () => {
+  assert.equal(L.nightCardDone(L.defaultDay()), false);
+});
+test('nightCardDone: true when wind-down is done', () => {
+  const d = L.defaultDay(); d.windDown.done = true;
+  assert.equal(L.nightCardDone(d), true);
+});
+test('nightCardDone: true with any nonzero rating', () => {
+  const d = L.defaultDay(); d.ratings.pauses = 2;
+  assert.equal(L.nightCardDone(d), true);
+});
+test('nightCardDone: true with a non-blank note', () => {
+  const d = L.defaultDay(); d.note = '  fine  ';
+  assert.equal(L.nightCardDone(d), true);
+});
+test('nightCardDone: a whitespace-only note does not count', () => {
+  const d = L.defaultDay(); d.note = '   ';
+  assert.equal(L.nightCardDone(d), false);
+});
+
+test('nightStepDone: step 0 tracks wind-down.done', () => {
+  const d = L.defaultDay();
+  assert.equal(L.nightStepDone(d, [false, false, false, false], 0), false);
+  d.windDown.done = true;
+  assert.equal(L.nightStepDone(d, [false, false, false, false], 0), true);
+});
+test('nightStepDone: step 1 (slips) tracks the visited flag, not the data', () => {
+  const d = L.defaultDay(); // no slips toggled on, a legitimate "no slips" answer
+  assert.equal(L.nightStepDone(d, [false, false, false, false], 1), false);
+  assert.equal(L.nightStepDone(d, [false, true, false, false], 1), true);
+});
+test('nightStepDone: step 2 tracks any nonzero rating', () => {
+  const d = L.defaultDay();
+  assert.equal(L.nightStepDone(d, [false, false, false, false], 2), false);
+  d.ratings.curiosity = 1;
+  assert.equal(L.nightStepDone(d, [false, false, false, false], 2), true);
+});
+test('nightStepDone: step 3 tracks a non-blank note', () => {
+  const d = L.defaultDay();
+  assert.equal(L.nightStepDone(d, [false, false, false, false], 3), false);
+  d.note = 'ok';
+  assert.equal(L.nightStepDone(d, [false, false, false, false], 3), true);
+});
+
+test('firstIncompleteNightStep: picks the first step whose data/visited signal is empty', () => {
+  const d = L.defaultDay();
+  assert.equal(L.firstIncompleteNightStep(d, [false, false, false, false]), 0);
+  d.windDown.done = true;
+  assert.equal(L.firstIncompleteNightStep(d, [false, false, false, false]), 1);
+  assert.equal(L.firstIncompleteNightStep(d, [true, true, false, false]), 2);
+  d.ratings.pauses = 3;
+  assert.equal(L.firstIncompleteNightStep(d, [true, true, false, false]), 3);
+});
+test('firstIncompleteNightStep: falls back to 0 when every step is already complete', () => {
+  const d = L.defaultDay();
+  d.windDown.done = true; d.ratings.pauses = 3; d.note = 'done';
+  assert.equal(L.firstIncompleteNightStep(d, [true, true, true, true]), 0);
+});
+
+// ---------- recentUrges / fmtTime ----------
+test('recentUrges: returns the newest n urges, most recent first', () => {
+  const s = makeState();
+  s.urges = [
+    { id: 'a', at: '2026-09-07T10:00:00.000Z' },
+    { id: 'b', at: '2026-09-09T10:00:00.000Z' },
+    { id: 'c', at: '2026-09-08T10:00:00.000Z' },
+  ];
+  const out = L.recentUrges(s, 2);
+  assert.deepEqual(out.map((u) => u.id), ['b', 'c']);
+});
+test('recentUrges: n larger than the list returns everything, still sorted', () => {
+  const s = makeState();
+  s.urges = [{ id: 'old', at: '2026-09-01T00:00:00.000Z' }, { id: 'new', at: '2026-09-05T00:00:00.000Z' }];
+  const out = L.recentUrges(s, 5);
+  assert.deepEqual(out.map((u) => u.id), ['new', 'old']);
+});
+test('fmtTime: formats local hours/minutes with am/pm, including noon and midnight', () => {
+  assert.equal(L.fmtTime(new Date(2026, 8, 7, 0, 5)), '12:05am');
+  assert.equal(L.fmtTime(new Date(2026, 8, 7, 9, 3)), '9:03am');
+  assert.equal(L.fmtTime(new Date(2026, 8, 7, 12, 0)), '12:00pm');
+  assert.equal(L.fmtTime(new Date(2026, 8, 7, 23, 45)), '11:45pm');
+});
+
 // ---------- backupDueDays ----------
 test('backupDueDays: returns 0 with fewer than 3 logged days', () => {
   const s = makeState();

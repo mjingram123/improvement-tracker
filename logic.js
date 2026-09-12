@@ -169,11 +169,55 @@
     return days >= 7 ? days : 0;
   }
 
+  // ---------- tab bar ----------
+  // Night after 15:00, or before the day's rollover hour (late-night use); Day otherwise.
+  function defaultTab(now, rolloverHour) {
+    const h = now.getHours();
+    return (h >= 15 || h < rolloverHour) ? 'night' : 'day';
+  }
+
+  // ---------- night flow ----------
+  // The existing partial-done rule: the night card counts as finished with any partial input.
+  function nightCardDone(d) {
+    return !!(d.windDown.done || RATINGS.some((r) => d.ratings[r.key] > 0) || (d.note && d.note.trim().length > 0));
+  }
+  // Step completeness for the 4-step flow. `visited` is the sessionStorage-tracked
+  // array of 4 booleans (step 1, Slips, has no data-only signal: turning zero slips on
+  // is a valid, complete answer, so it relies on the visited flag instead).
+  function nightStepDone(d, visited, i) {
+    switch (i) {
+      case 0: return !!(d.windDown && d.windDown.done);
+      case 1: return !!(visited && visited[1]);
+      case 2: return RATINGS.some((r) => d.ratings[r.key] > 0);
+      case 3: return !!(d.note && d.note.trim().length > 0);
+      default: return false;
+    }
+  }
+  function firstIncompleteNightStep(d, visited) {
+    for (let i = 0; i < 4; i++) if (!nightStepDone(d, visited, i)) return i;
+    return 0;
+  }
+
+  // ---------- urges ----------
+  function recentUrges(state, n) {
+    return state.urges.slice().sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, n);
+  }
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    let h = d.getHours();
+    const m = pad(d.getMinutes());
+    const ap = h >= 12 ? 'pm' : 'am';
+    h = h % 12; if (h === 0) h = 12;
+    return `${h}:${m}${ap}`;
+  }
+
   return {
     LAPSES, RATINGS, HANGOVER, DAY_NAMES, MONTHS,
     pad, keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
     todayKeyFor, urgeDayKeyFor,
     defaultState, defaultDay, normalize,
     weekStats, lastLapse, mergeInto, backupDueDays,
+    defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
+    recentUrges, fmtTime,
   };
 });

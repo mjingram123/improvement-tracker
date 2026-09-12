@@ -8,6 +8,8 @@ const {
   keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
   todayKeyFor, defaultState, defaultDay, normalize,
   weekStats: weekStatsPure, lastLapse: lastLapsePure, mergeInto, backupDueDays,
+  defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
+  recentUrges, fmtTime,
 } = window.ITLogic;
 
 // ---------- constants ----------
@@ -29,7 +31,7 @@ function weekKeys(start) { return Array.from({ length: 7 }, (_, i) => addDays(st
 
 // ---------- state ----------
 let state = defaultState();
-let tab = 'today';
+let tab = 'day';
 let weekCursor = null; // week start key being viewed
 let restoredFrom = null;
 let storageHealth = { ls: 'unknown', idb: 'unknown', snaps: 0 };
@@ -187,26 +189,32 @@ function ratingRow({ label, value, arg }) {
 }
 
 // ---------- Onboarding checklist ----------
+const ONBOARDING_ITEMS = [
+  { key: 'home', label: 'Add to Home Screen', hint: 'Share button in Safari, then Add to Home Screen. Open it from the icon from now on, that is where your data lives.' },
+  { key: 'shortcuts', label: 'Two reminders', hint: 'Shortcuts app > Automation > Time of Day, 9:00 AM and 10:00 PM, action Open App > Improve. Turn off Ask Before Running.' },
+  { key: 'backup', label: 'First backup', hint: 'More > Share file, save it to Notes.' },
+];
+function onboardingRows() {
+  const o = state.settings.onboarding;
+  return ONBOARDING_ITEMS.map((it) => checkRow({ label: it.label, hint: it.hint, checked: !!o[it.key], action: 'onboard-check', arg: it.key })).join('');
+}
+// Top card on Day until dismissed.
 function renderOnboarding() {
   if (state.settings.onboarded) return '';
-  const o = state.settings.onboarding;
-  const items = [
-    { key: 'home', label: 'Add to Home Screen', hint: 'Share button in Safari, then Add to Home Screen. Open it from the icon from now on, that is where your data lives.' },
-    { key: 'shortcuts', label: 'Two reminders', hint: 'Shortcuts app > Automation > Time of Day, 9:00 AM and 10:00 PM, action Open App > Improve. Turn off Ask Before Running.' },
-    { key: 'backup', label: 'First backup', hint: 'More > Share file, save it to Notes.' },
-  ];
-  const rows = items.map((it) => checkRow({ label: it.label, hint: it.hint, checked: !!o[it.key], action: 'onboard-check', arg: it.key })).join('');
-  return `<section class="card"><div class="card-head"><h2>Getting set up</h2></div>${rows}
+  return `<section class="card"><div class="card-head"><h2>Getting set up</h2></div>${onboardingRows()}
     <div class="btn-row"><button class="btn" type="button" data-action="onboard-done">Done, hide this</button></div></section>`;
 }
+// Moves to More once dismissed, so the instructions stay reachable.
+function renderSetupInMore() {
+  if (!state.settings.onboarded) return '';
+  return `<section class="card"><div class="card-head"><h2>Getting set up</h2></div>${onboardingRows()}</section>`;
+}
 
-// ---------- Today ----------
-function renderToday() {
+// ---------- Day ----------
+function renderDay() {
   const key = todayKey();
   const d = day(key);
   const wd = weekdayOf(key);
-  const hour = new Date().getHours();
-  const nightFirst = hour >= 15 || hour < state.settings.rolloverHour;
   const s = state.settings;
 
   const morningDone = d.stretched && (!d.hungover || HANGOVER.every((h) => d.hangover[h.key]));
@@ -220,60 +228,100 @@ function renderToday() {
   }
   morning += `</section>`;
 
-  let commit = '';
   const rows = [];
   if (s.waterPoloDays.includes(wd)) rows.push(checkRow({ label: 'Water polo', checked: d.waterPolo, action: 'day-bool', arg: 'waterPolo' }));
   if (s.dinnerDays.includes(wd)) rows.push(checkRow({ label: 'Dinner out', checked: d.dinnerOut, action: 'day-bool', arg: 'dinnerOut' }));
   rows.push(checkRow({ label: 'Gym', hint: 'log it when it happens', checked: d.gym, action: 'day-bool', arg: 'gym' }));
-  commit = `<section class="card"><div class="card-head"><h2>Commitments</h2></div>${rows.join('')}</section>`;
-
-  // night
-  const wdn = d.windDown;
-  const anyRating = RATINGS.some((r) => d.ratings[r.key] > 0);
-  const nightDone = wdn.done || anyRating || d.note.trim().length > 0;
-  let night = `<section class="card${nightDone ? ' done' : ''}"><div class="card-head"><h2>Night</h2>${nightDone ? '<span class="badge">done</span>' : ''}</div>`;
-  if (wdn.done) {
-    night += `<div class="row"><span class="label">Wind-down<span class="hint">15 minutes, done</span></span><button class="check" type="button" data-action="winddown-reset" aria-pressed="true" aria-label="Wind-down done, tap to reset">&#10003;</button></div>`;
-  } else if (wdn.endsAt) {
-    night += `<div class="timer-wrap"><div><div class="muted small">Wind-down</div><div class="timer" id="winddown-timer">${mmss(wdn.endsAt - Date.now())}</div></div>
-      <button class="btn" type="button" data-action="winddown-cancel">Cancel</button></div>`;
-  } else {
-    night += `<div class="row"><span class="label">Wind-down<span class="hint">phone down, wash up, mouth tape</span></span>
-      <span style="display:flex;gap:8px;align-items:center">${s.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Wind%20Down">Start iPhone timer</a>' : ''}<button class="btn primary" type="button" data-action="winddown-start">Start 15:00</button></span></div>`;
-  }
-  night += `<h3 style="margin-top:10px">Slips</h3>`;
-  for (const l of LAPSES) {
-    night += toggleRow({ label: l.label, hint: l.hint, checked: d.lapses[l.key], action: 'lapse', arg: l.key, warn: true });
-    if (d.lapses[l.key]) {
-      night += `<div class="sub-rows"><textarea class="field" rows="1" data-action="lapse-note" data-arg="${l.key}" placeholder="What was happening right before?">${esc(d.lapseNotes[l.key])}</textarea></div>`;
-    }
-  }
-  night += `<h3 style="margin-top:14px">How I showed up</h3>`;
-  for (const r of RATINGS) night += ratingRow({ label: r.label, value: d.ratings[r.key], arg: r.key });
-  night += `<h3 style="margin-top:14px">One sentence</h3>
-    <textarea class="field" rows="2" data-action="note" placeholder="About today.">${esc(d.note)}</textarea>`;
-  night += `</section>`;
-
-  const pending = state.urges.filter((u) => !u.outcome);
-  let urges = '';
-  if (pending.length) {
-    urges = `<section class="card"><div class="card-head"><h2>Riding it out</h2></div>` + pending.map((u) => {
-      const left = new Date(u.endsAt).getTime() - Date.now();
-      const over = left <= 0;
-      return `<div class="timer-wrap"><div><div class="muted small">${u.kind === 'porn' ? 'Porn' : 'Scrolling'}${u.trigger ? ' · ' + esc(u.trigger) : ''}</div>
-        <div class="timer" data-timer="${u.id}" data-ends="${new Date(u.endsAt).getTime()}">${over ? 'time' : mmss(left)}</div></div></div>
-        <div class="btn-row">
-          <button class="btn primary" type="button" data-action="urge-outcome" data-arg="${u.id}:rode" ${over ? '' : 'disabled'}>Rode it out</button>
-          <button class="btn warn" type="button" data-action="urge-outcome" data-arg="${u.id}:gave">Gave in</button>
-        </div>
-        ${over ? '' : '<p class="muted small" style="margin-top:8px">Wait it out. Rode it out unlocks when the timer ends.</p>'}`;
-    }).join('<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">') + `</section>`;
-  }
+  const commit = `<section class="card"><div class="card-head"><h2>Commitments</h2></div>${rows.join('')}</section>`;
 
   const onboarding = renderOnboarding();
   const banner = restoredFrom ? `<div class="banner ok">Restored your data from the ${esc(restoredFrom)}. Consider making a backup in More.</div>` : '';
-  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">${nightFirst ? 'evening' : 'morning'}</span></div>`;
-  return onboarding + header + banner + urges + (nightFirst ? night + commit + morning : morning + commit + night);
+  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">morning</span></div>`;
+  return onboarding + header + banner + morning + commit;
+}
+
+// ---------- Night ----------
+const NIGHT_UI_KEY = 'it:nightUi';
+function loadNightUi() {
+  let st = null;
+  try { st = JSON.parse(sessionStorage.getItem(NIGHT_UI_KEY) || 'null'); } catch {}
+  const key = todayKey();
+  if (!st || st.day !== key || !Array.isArray(st.visited) || st.visited.length !== 4) {
+    st = { day: key, visited: [false, false, false, false], step: null, forceFlow: false };
+  }
+  return st;
+}
+function saveNightUi(st) {
+  try { sessionStorage.setItem(NIGHT_UI_KEY, JSON.stringify(st)); } catch {}
+}
+
+function nightStepWinddown(d) {
+  const wd = d.windDown;
+  if (wd.done) {
+    return `<div class="row"><span class="label">Wind-down<span class="hint">15 minutes, done</span></span><button class="check" type="button" data-action="winddown-reset" aria-pressed="true" aria-label="Wind-down done, tap to reset">&#10003;</button></div>`;
+  }
+  if (wd.endsAt) {
+    return `<div class="timer-wrap"><div><div class="muted small">Wind-down</div><div class="timer" id="winddown-timer">${mmss(wd.endsAt - Date.now())}</div></div>
+      <button class="btn" type="button" data-action="winddown-cancel">Cancel</button></div>`;
+  }
+  return `<div class="row"><span class="label">Wind-down<span class="hint">phone down, wash up, mouth tape</span></span>
+      <span style="display:flex;gap:8px;align-items:center">${state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Wind%20Down">Start iPhone timer</a>' : ''}<button class="btn primary" type="button" data-action="winddown-start">Start 15:00</button></span></div>`;
+}
+function nightStepSlips(d) {
+  let out = '';
+  for (const l of LAPSES) {
+    out += toggleRow({ label: l.label, hint: l.hint, checked: d.lapses[l.key], action: 'lapse', arg: l.key, warn: true });
+    if (d.lapses[l.key]) {
+      out += `<div class="sub-rows"><textarea class="field" rows="1" data-action="lapse-note" data-arg="${l.key}" placeholder="What was happening right before?">${esc(d.lapseNotes[l.key])}</textarea></div>`;
+    }
+  }
+  return out;
+}
+function nightStepRatings(d) {
+  return RATINGS.map((r) => ratingRow({ label: r.label, value: d.ratings[r.key], arg: r.key })).join('');
+}
+function nightStepNote(d) {
+  return `<textarea class="field" rows="3" data-action="note" placeholder="About today.">${esc(d.note)}</textarea>`;
+}
+const NIGHT_STEP_TITLES = ['Wind-down', 'Slips', 'How I showed up', 'One sentence'];
+function renderNightFlow(d, st) {
+  const step = st.step;
+  const dots = [0, 1, 2, 3].map((i) => `<button type="button" class="step-dot${i === step ? ' current' : ''}${nightStepDone(d, st.visited, i) ? ' done' : ''}" data-action="night-goto" data-arg="${i}" aria-label="${esc(NIGHT_STEP_TITLES[i])}" aria-current="${i === step ? 'step' : 'false'}"></button>`).join('');
+  const body = step === 0 ? nightStepWinddown(d) : step === 1 ? nightStepSlips(d) : step === 2 ? nightStepRatings(d) : nightStepNote(d);
+  const backBtn = step > 0 ? `<button class="btn" type="button" data-action="night-back">Back</button>` : '';
+  const nextLabel = step === 3 ? 'Done' : 'Next';
+  const backToSummary = st.forceFlow ? `<button class="btn-text" type="button" data-action="night-summary">Back to summary</button>` : '';
+  return `<div class="step-dots" role="tablist" aria-label="Night steps">${dots}</div>
+    <section class="card"><h3>${esc(NIGHT_STEP_TITLES[step])}</h3>${body}</section>
+    <div class="btn-row">${backBtn}<button class="btn primary" type="button" data-action="night-next">${nextLabel}</button></div>
+    <button class="btn-text" type="button" data-action="night-skip">Skip</button>
+    ${backToSummary}`;
+}
+function renderNightSummary(d) {
+  const windText = d.windDown.done ? '15 minutes, done' : 'Skipped';
+  const onSlips = LAPSES.filter((l) => d.lapses[l.key]);
+  const slipsText = onSlips.length ? onSlips.map((l) => esc(l.label)).join(', ') : 'None';
+  const onRatings = RATINGS.filter((r) => d.ratings[r.key] > 0);
+  const ratingsText = onRatings.length ? onRatings.map((r) => `${esc(r.label)}: ${d.ratings[r.key]}`).join(' · ') : 'Skipped';
+  const noteText = d.note && d.note.trim() ? esc(d.note) : 'No note';
+  const row = (label, value, step) => `<div class="row"><span class="label">${esc(label)}<span class="hint">${value}</span></span><button class="btn" type="button" data-action="night-edit" data-arg="${step}">Edit</button></div>`;
+  return `<section class="card done"><div class="card-head"><h2>Tonight</h2><span class="badge">done</span></div>
+    ${row('Wind-down', windText, 0)}
+    ${row('Slips', slipsText, 1)}
+    ${row('How I showed up', ratingsText, 2)}
+    ${row('One sentence', noteText, 3)}
+  </section>`;
+}
+function renderNight() {
+  const key = todayKey();
+  const d = day(key);
+  const header = `<div class="header"><h1>${esc(fmtLong(key))}</h1><span class="sub">evening</span></div>`;
+  const st = loadNightUi();
+  const allVisited = st.visited.every(Boolean);
+  const showSummary = !st.forceFlow && (allVisited || nightCardDone(d));
+  if (showSummary) return header + renderNightSummary(d);
+  if (st.step == null) { st.step = firstIncompleteNightStep(d, st.visited); saveNightUi(st); }
+  return header + renderNightFlow(d, st);
 }
 
 // ---------- Week ----------
@@ -387,24 +435,63 @@ function renderMore() {
   <section class="card"><div class="card-head"><h2>Reminders</h2></div>
     <p class="muted small">This app never sends notifications. To get nudged, add a Shortcuts automation: at 9:00 am and 10:00 pm, Open App → Improve. Or set two plain alarms called "check in".</p>
     ${toggleRow({ label: 'Shortcut timers', hint: 'If you make Shortcuts named Wind Down and Ride It Out that start a 15 and 10 minute timer, the app can launch them.', checked: s.useShortcutTimers, action: 'settings-bool', arg: 'useShortcutTimers' })}
-  </section>`;
+  </section>
+  ${renderSetupInMore()}`;
 }
 
-// ---------- urge sheet ----------
-let sheetKind = 'scroll';
-function openSheet() {
-  sheetKind = 'scroll';
-  const el = $('#sheet');
-  el.innerHTML = `<div class="sheet-inner" role="dialog" aria-label="Log an urge">
-    <h2>What is pulling?</h2>
-    <div class="choice"><button type="button" data-action="sheet-kind" data-arg="scroll" aria-pressed="true">Scrolling</button><button type="button" data-action="sheet-kind" data-arg="porn" aria-pressed="false">Porn</button></div>
-    <input class="field" id="sheet-trigger" placeholder="Trigger, two words (bored, tired, alone)">
-    <div class="btn-row">${state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Ride%20It%20Out">Start iPhone timer</a>' : ''}<button class="btn" type="button" data-action="sheet-close">Cancel</button><button class="btn primary" type="button" data-action="sheet-start">Start 10 minutes</button></div>
-  </div>`;
-  el.hidden = false;
-  setTimeout(() => $('#sheet-trigger')?.focus(), 50);
+// ---------- urge overlay ----------
+let urgeKind = 'scroll';
+function pendingUrge() { return state.urges.find((u) => !u.outcome) || null; }
+function renderUrgeTallySection() {
+  const stats = weekStats(weekStart(todayKey()));
+  const recent = recentUrges(state, 5);
+  const rows = recent.map((u) => {
+    const kind = u.kind === 'porn' ? 'Porn' : 'Scrolling';
+    const outcome = u.outcome === 'rode' ? 'rode it out' : u.outcome === 'gave' ? 'gave in' : 'in progress';
+    return `<div class="entry"><div class="d">${esc(fmtTime(u.at))} · ${esc(kind)}${u.trigger ? ' · ' + esc(u.trigger) : ''}</div><div class="q">${esc(outcome)}</div></div>`;
+  }).join('');
+  return `<section class="card"><div class="card-head"><h2>This week</h2></div>
+    <p>${stats.rode} rode &middot; ${stats.gave} gave in</p>
+    ${rows || '<p class="muted small">No urges logged yet.</p>'}
+  </section>`;
 }
-function closeSheet() { const el = $('#sheet'); el.hidden = true; el.innerHTML = ''; }
+function renderUrgeIdle() {
+  return `<h2>What is pulling?</h2>
+    <div class="choice"><button type="button" data-action="urge-kind" data-arg="scroll" aria-pressed="${urgeKind === 'scroll'}">Scrolling</button><button type="button" data-action="urge-kind" data-arg="porn" aria-pressed="${urgeKind === 'porn'}">Porn</button></div>
+    <input class="field" id="urge-trigger" placeholder="Trigger, two words (bored, tired, alone)">
+    <div class="btn-row">${state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Ride%20It%20Out">Start iPhone timer</a>' : ''}<button class="btn primary block" type="button" data-action="urge-start">Start 10 minutes</button></div>
+    ${renderUrgeTallySection()}`;
+}
+function renderUrgeRunning(u) {
+  const left = new Date(u.endsAt).getTime() - Date.now();
+  const over = left <= 0;
+  const kind = u.kind === 'porn' ? 'Porn' : 'Scrolling';
+  return `<h2>${esc(kind)}${u.trigger ? ' · ' + esc(u.trigger) : ''}</h2>
+    <div class="timer" id="urge-timer" data-timer="${u.id}" data-ends="${new Date(u.endsAt).getTime()}">${over ? '00:00' : mmss(left)}</div>
+    <div class="btn-row">
+      <button class="btn primary" type="button" data-action="urge-outcome" data-arg="${u.id}:rode" ${over ? '' : 'disabled'}>Rode it out</button>
+      <button class="btn warn" type="button" data-action="urge-outcome" data-arg="${u.id}:gave">Gave in</button>
+    </div>
+    <p class="muted small" style="margin-top:8px">Wait it out. Rode it out unlocks when the timer ends.</p>
+    ${renderUrgeTallySection()}`;
+}
+function renderUrgeOverlay() {
+  const el = $('#urge-overlay');
+  const u = pendingUrge();
+  const body = u ? renderUrgeRunning(u) : renderUrgeIdle();
+  el.innerHTML = `<div class="overlay-inner" role="dialog" aria-label="Urge">
+    <button class="overlay-close" type="button" data-action="urge-close" aria-label="Close">&times;</button>
+    ${body}
+  </div>`;
+}
+function openUrgeOverlay() {
+  urgeKind = 'scroll';
+  renderUrgeOverlay();
+  const el = $('#urge-overlay');
+  el.hidden = false;
+  setTimeout(() => $('#urge-trigger')?.focus(), 50);
+}
+function closeUrgeOverlay() { const el = $('#urge-overlay'); el.hidden = true; el.innerHTML = ''; }
 
 // ---------- toast ----------
 let toastTimer = null;
@@ -414,16 +501,25 @@ function toast(msg) {
 }
 
 // ---------- render ----------
+function updateUrgeButton() {
+  const ub = $('.urge-btn');
+  if (!ub) return;
+  const u = pendingUrge();
+  if (u) {
+    const left = new Date(u.endsAt).getTime() - Date.now();
+    ub.textContent = left > 0 ? `Riding it out · ${mmss(left)}` : 'Riding it out';
+    ub.classList.add('urge-active');
+  } else {
+    ub.textContent = 'I feel an urge';
+    ub.classList.remove('urge-active');
+  }
+}
 function render() {
   const view = $('#view');
   const scrollY = window.scrollY;
-  view.innerHTML = tab === 'today' ? renderToday() : tab === 'week' ? renderWeek() : renderMore();
+  view.innerHTML = tab === 'day' ? renderDay() : tab === 'week' ? renderWeek() : tab === 'night' ? renderNight() : renderMore();
   document.querySelectorAll('.tab').forEach((b) => { if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-  const pending = state.urges.some((u) => !u.outcome);
-  const ub = $('.urge-btn');
-  ub.textContent = pending ? 'Riding it out…' : 'I feel an urge';
-  ub.classList.toggle('urge-active', pending);
-  $('#urgebar').hidden = tab !== 'today';
+  updateUrgeButton();
   window.scrollTo(0, scrollY);
   ensureTick();
   autosize();
@@ -448,6 +544,9 @@ function tick() {
     const left = Number(el.dataset.ends) - Date.now();
     if (left <= 0) rerender = true; else el.textContent = mmss(left);
   });
+  updateUrgeButton();
+  const overlayEl = $('#urge-overlay');
+  if (rerender && overlayEl && !overlayEl.hidden) renderUrgeOverlay();
   if (rerender) render();
   ensureTick();
 }
@@ -472,19 +571,36 @@ document.addEventListener('click', (e) => {
     case 'winddown-start': d.windDown.endsAt = Date.now() + WIND_DOWN_MIN * 60000; d.windDown.done = false; touch(); save(); render(); break;
     case 'winddown-cancel': d.windDown.endsAt = null; touch(); save(); render(); break;
     case 'winddown-reset': d.windDown.done = false; touch(); save(); render(); break;
-    case 'urge-open': openSheet(); break;
-    case 'sheet-close': closeSheet(); break;
-    case 'sheet-kind': sheetKind = arg; document.querySelectorAll('[data-action="sheet-kind"]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.arg === arg)); break;
-    case 'sheet-start': {
-      const trigger = ($('#sheet-trigger')?.value || '').trim().slice(0, 80);
+    case 'night-goto': { const st = loadNightUi(); st.step = Number(arg); saveNightUi(st); render(); break; }
+    case 'night-next':
+    case 'night-skip': {
+      const st = loadNightUi();
+      st.visited[st.step] = true;
+      if (st.step < 3) st.step += 1; else st.forceFlow = false;
+      saveNightUi(st); render(); break;
+    }
+    case 'night-back': { const st = loadNightUi(); if (st.step > 0) st.step -= 1; saveNightUi(st); render(); break; }
+    case 'night-edit': { const st = loadNightUi(); st.step = Number(arg); st.forceFlow = true; saveNightUi(st); render(); break; }
+    case 'night-summary': { const st = loadNightUi(); st.forceFlow = false; saveNightUi(st); render(); break; }
+    case 'urge-open': openUrgeOverlay(); break;
+    case 'urge-close': closeUrgeOverlay(); break;
+    case 'urge-kind': urgeKind = arg; document.querySelectorAll('[data-action="urge-kind"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.arg === arg))); break;
+    case 'urge-start': {
+      const trigger = ($('#urge-trigger')?.value || '').trim().slice(0, 80);
       const now = Date.now();
-      state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: sheetKind, trigger, endsAt: new Date(now + URGE_MIN * 60000).toISOString(), outcome: null });
-      state.meta.updatedAt = now; save(); closeSheet(); tab = 'today'; render(); window.scrollTo(0, 0); break;
+      state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: urgeKind, trigger, endsAt: new Date(now + URGE_MIN * 60000).toISOString(), outcome: null });
+      state.meta.updatedAt = now; save(); renderUrgeOverlay(); render(); break;
     }
     case 'urge-outcome': {
       const [id, outcome] = arg.split(':');
       const u = state.urges.find((x) => x.id === id);
-      if (u) { u.outcome = outcome; u.resolvedAt = new Date().toISOString(); state.meta.updatedAt = Date.now(); save(); toast(outcome === 'rode' ? 'That counts.' : 'Logged. Tomorrow is a new day.'); render(); }
+      if (u) {
+        u.outcome = outcome; u.resolvedAt = new Date().toISOString(); state.meta.updatedAt = Date.now();
+        save();
+        toast(outcome === 'rode' ? 'That counts.' : 'Logged. Tomorrow is a new day.');
+        closeUrgeOverlay();
+        render();
+      }
       break;
     }
     case 'week-nav': weekCursor = addDays(weekCursor, 7 * Number(arg)); render(); window.scrollTo(0, 0); break;
@@ -531,13 +647,14 @@ document.addEventListener('input', (e) => {
     clearTimeout(noteTimer); noteTimer = setTimeout(save, 300);
   }
 });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden) closeSheet(); });
-$('#sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeSheet(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#urge-overlay').hidden) closeUrgeOverlay(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); else { clearTimeout(noteTimer); save(); } });
 window.addEventListener('pagehide', () => { clearTimeout(noteTimer); save(); clearTimeout(saveTimer); mirror(JSON.stringify(state)); });
 
 // ---------- boot ----------
 loadState().then(() => {
+  tab = defaultTab(new Date(), state.settings.rolloverHour);
+  if (tab === 'week') weekCursor = weekStart(todayKey());
   render();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
