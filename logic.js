@@ -68,6 +68,7 @@
         rolloverHour: 4, hangoverDays: [5, 6, 0], waterPoloDays: [2, 0], dinnerDays: [0], lastExport: null,
         onboarded: false, onboarding: { home: false, shortcuts: false, backup: false },
         useShortcutTimers: false, ntfyTopic: '', ntfyTimers: false,
+        intentions: { why: '', notes: { curiosity: '', story: '', pauses: '', present: '' } },
       },
       meta: { updatedAt: 0, createdAt: Date.now() },
     };
@@ -88,6 +89,11 @@
     const out = { ...d, ...s };
     out.settings = { ...d.settings, ...(s.settings || {}) };
     out.settings.onboarding = { ...d.settings.onboarding, ...((s.settings && s.settings.onboarding) || {}) };
+    const incIntentions = (s.settings && s.settings.intentions) || {};
+    out.settings.intentions = {
+      ...d.settings.intentions, ...incIntentions,
+      notes: { ...d.settings.intentions.notes, ...(incIntentions.notes || {}) },
+    };
     out.meta = { ...d.meta, ...(s.meta || {}) };
     out.days = {};
     for (const [k, v] of Object.entries(s.days || {})) {

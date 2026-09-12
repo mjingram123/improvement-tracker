@@ -223,8 +223,9 @@ function kitChip({ label, checked, action, arg }) {
   return `<button class="kitchip" type="button" data-action="${action}" data-arg="${esc(arg || '')}" aria-pressed="${checked}">
     <span class="dot">${checkSvg(12)}</span>${esc(label)}</button>`;
 }
-function ratingRow({ label, value, arg }) {
-  return `<div class="rating-row"><span class="label">${esc(label)}</span><div class="rating" role="group" aria-label="${esc(label)}">
+function ratingRow({ label, value, arg, note }) {
+  const showNote = note && note.trim();
+  return `<div class="rating-row"><div style="display:flex;flex-direction:column;gap:2px"><span class="label">${esc(label)}</span>${showNote ? `<span class="meta">${esc(note)}</span>` : ''}</div><div class="rating" role="group" aria-label="${esc(label)}">
     ${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-action="rate" data-arg="${arg}:${n}" aria-pressed="${value === n}">${n}</button>`).join('')}
   </div></div>`;
 }
@@ -340,7 +341,8 @@ function nightStepSlips(d) {
   return out;
 }
 function nightStepRatings(d) {
-  return `<div style="display:flex;flex-direction:column;gap:18px">${RATINGS.map((r) => ratingRow({ label: r.label, value: d.ratings[r.key], arg: r.key })).join('')}</div>`;
+  const notes = state.settings.intentions.notes;
+  return `<div style="display:flex;flex-direction:column;gap:18px">${RATINGS.map((r) => ratingRow({ label: r.label, value: d.ratings[r.key], arg: r.key, note: notes[r.key] })).join('')}</div>`;
 }
 function nightStepNote(d) {
   return `<div class="field-group"><span class="field-label">Reflection</span><textarea class="field" id="night-note" rows="4" data-action="note" placeholder="About today.">${esc(d.note)}</textarea></div>`;
@@ -430,11 +432,13 @@ function renderWeek() {
   const nav = `<div class="weeknav"><button type="button" data-action="week-nav" data-arg="-1" aria-label="Previous week">${chevronSvg('l')}</button>
     <div class="weeklabel">${title}</div>
     <button type="button" data-action="week-nav" data-arg="1" aria-label="Next week" ${isThis ? 'disabled' : ''}>${chevronSvg('r')}</button></div>`;
+  const why = state.settings.intentions.why;
+  const whyLine = why && why.trim() ? `<div class="meta" style="text-align:center;padding:0 4px">${esc(why)}</div>` : '';
 
   const needBackup = backupDue();
   const banner = needBackup ? `<div class="banner">${bannerSvg}No backup in ${needBackup} days. Make one in More, it takes ten seconds.</div>` : '';
 
-  if (cur.n === 0) return `<div class="screen-14">${nav}${banner}<section class="card"><p class="muted">Nothing logged yet for this week.</p></section></div>`;
+  if (cur.n === 0) return `<div class="screen-14">${nav}${whyLine}${banner}<section class="card"><p class="muted">Nothing logged yet for this week.</p></section></div>`;
 
   let slips = `<section class="card"><h2>Slips</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">`;
   for (const l of LAPSES) slips += rate(l.label, cur.lapses[l.key], cur.n, { prev: prev.logged ? prev.lapses[l.key] : null, prevN: prev.logged ? prev.n : null });
@@ -469,11 +473,29 @@ function renderWeek() {
   }).join('');
   const journal = `<section class="card"><h2>Journal</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">${entries || '<p class="muted small">Nothing written yet.</p>'}</div></section>`;
 
-  return `<div class="screen-14">${nav}${banner}${slips}${showed}${routines}${journal}</div>`;
+  return `<div class="screen-14">${nav}${whyLine}${banner}${slips}${showed}${routines}${journal}</div>`;
 }
 function backupDue() { return backupDueDays(state, Date.now()); }
 
 // ---------- More ----------
+const INTENTION_PLACEHOLDERS = {
+  curiosity: 'ask the second question',
+  story: "let it be someone else's story too",
+  pauses: 'count to five before responding',
+  present: 'put the phone in the other room',
+};
+function renderIntentions() {
+  const it = state.settings.intentions;
+  let out = `<section class="card"><h2>Intentions</h2>
+    <div class="field-group" style="margin-top:12px"><span class="field-label">Why I'm doing this</span>
+      <textarea class="field" rows="3" data-action="intention-why" placeholder="What this is for, in your own words.">${esc(it.why)}</textarea></div>`;
+  for (const r of RATINGS) {
+    out += `<div class="field-group" style="margin-top:12px"><span class="field-label">${esc(r.label)}</span>
+      <input class="field" type="text" data-action="intention-note" data-arg="${r.key}" value="${esc(it.notes[r.key])}" placeholder="${esc(INTENTION_PLACEHOLDERS[r.key])}"></div>`;
+  }
+  out += `</section>`;
+  return out;
+}
 function renderMore() {
   const s = state.settings;
   const last = s.lastExport ? new Date(s.lastExport) : null;
@@ -508,6 +530,7 @@ function renderMore() {
     </div>
     <p class="muted small" style="margin-top:10px">Two independent stores on the device plus a previous-save copy. If one is lost the app restores from another on next open. Still, keep a backup file.</p>
   </section>
+  ${renderIntentions()}
   <section class="card"><h2>Schedule</h2>
     <div style="display:flex;flex-direction:column;gap:16px;margin-top:14px">
       ${chips('Hangover prompt days', s.hangoverDays, 'set-hangover')}
@@ -757,6 +780,10 @@ document.addEventListener('input', (e) => {
     clearTimeout(noteTimer); noteTimer = setTimeout(save, 300);
   } else if (a === 'ntfy-topic') {
     clearTimeout(noteTimer); noteTimer = setTimeout(() => { state.settings.ntfyTopic = t.value.trim(); save(); }, 300);
+  } else if (a === 'intention-why' || a === 'intention-note') {
+    if (a === 'intention-why') state.settings.intentions.why = t.value; else state.settings.intentions.notes[arg] = t.value;
+    if (t.tagName === 'TEXTAREA') { t.style.height = 'auto'; t.style.height = Math.max(48, t.scrollHeight) + 'px'; }
+    clearTimeout(noteTimer); noteTimer = setTimeout(save, 300);
   }
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#urge-overlay').hidden) closeUrgeOverlay(); });

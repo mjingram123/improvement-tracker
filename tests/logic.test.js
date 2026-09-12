@@ -109,6 +109,23 @@ test('normalize: partial settings.onboarding merges with defaults', () => {
   const out = L.normalize({ settings: { onboarding: { home: true } } });
   assert.deepEqual(out.settings.onboarding, { home: true, shortcuts: false, backup: false });
 });
+test('normalize: old saves with no settings.intentions get the default shape', () => {
+  const out = L.normalize({ settings: { rolloverHour: 4 } });
+  assert.deepEqual(out.settings.intentions, { why: '', notes: { curiosity: '', story: '', pauses: '', present: '' } });
+});
+test('normalize: null/undefined input still gets the default intentions shape', () => {
+  const out = L.normalize(null);
+  assert.deepEqual(out.settings.intentions, { why: '', notes: { curiosity: '', story: '', pauses: '', present: '' } });
+});
+test('normalize: partial settings.intentions deep-merges why and notes with defaults', () => {
+  const out = L.normalize({ settings: { intentions: { why: 'stay present', notes: { curiosity: 'ask more' } } } });
+  assert.deepEqual(out.settings.intentions, { why: 'stay present', notes: { curiosity: 'ask more', story: '', pauses: '', present: '' } });
+});
+test('normalize: full settings.intentions round-trips unchanged', () => {
+  const intentions = { why: 'why text', notes: { curiosity: 'a', story: 'b', pauses: 'c', present: 'd' } };
+  const out = L.normalize({ settings: { intentions } });
+  assert.deepEqual(out.settings.intentions, intentions);
+});
 
 // ---------- mergeInto ----------
 test('mergeInto: newer day (by u) overwrites older', () => {
