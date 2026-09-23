@@ -5,7 +5,7 @@
 'use strict';
 const IT = window.IT;
 const { esc, ring, mmss, fmtTime } = IT.ui;
-const { recentUrges, weekStart, weekStats: weekStatsPure, shortcutsUiVisible } = window.ITLogic;
+const { recentUrges, weekStart, weekStats: weekStatsPure } = window.ITLogic;
 
 const closeSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -30,11 +30,10 @@ function renderUrgeLog() {
   </div>`;
 }
 function renderUrgeIdle() {
-  const scLink = shortcutsUiVisible(IT.state.settings) && IT.state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Ride%20It%20Out">Start iPhone timer</a>' : '';
   return `<h1 class="title">Which pull is it?</h1>
     <div class="segmented-blue"><button type="button" data-action="urge-kind" data-arg="scroll" aria-pressed="${urgeKind === 'scroll'}">Scrolling</button><button type="button" data-action="urge-kind" data-arg="porn" aria-pressed="${urgeKind === 'porn'}">Porn</button></div>
     <div class="field-group"><span class="field-label">Trigger</span><input class="field" id="urge-trigger" placeholder="two words: bored, tired, alone"></div>
-    <div class="btn-stack">${scLink}<button class="btn primary huge block" type="button" data-action="urge-start">Start 10 minutes</button></div>
+    <div class="btn-stack"><button class="btn primary huge block" type="button" data-action="urge-start">Start 10 minutes</button></div>
     ${renderUrgeLog()}`;
 }
 function renderUrgeRunning(u) {
