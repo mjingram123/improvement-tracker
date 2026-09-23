@@ -19,6 +19,9 @@ const NightLogic = window.ITLogicNight || {
     if (!on.length) return null;
     return 'Rated: ' + on.map((r) => `${r.key} ${d.ratings[r.key]}`).join(' · ');
   },
+  lapseHelp(d) { const h = (d && d.lapseHelp) || {}; return { scroll: h.scroll || '', porn: h.porn || '', nag: h.nag || '' }; },
+  scrollMinutes(d) { const v = d && d.scrollMinutes; return typeof v === 'number' && !Number.isNaN(v) ? v : null; },
+  parseScrollMinutes(text) { const digits = String(text == null ? '' : text).replace(/[^0-9]/g, ''); return digits === '' ? null : Number(digits); },
 };
 
 // Only the current step index and the "forced flow" (editing from summary) flag
@@ -57,12 +60,20 @@ function nightStepWinddown(d) {
     <div class="meta">phone down, wash up, mouth tape</div>${checksHtml}`;
 }
 function nightStepSlips(d) {
+  const help = NightLogic.lapseHelp(d);
+  const minutes = NightLogic.scrollMinutes(d);
   let out = '';
   for (const l of LAPSES) {
     out += `<div>${toggleRow({ label: l.label, hint: l.hint, checked: d.lapses[l.key], action: 'lapse', arg: l.key })}`;
     if (d.lapses[l.key]) {
       out += `<div class="sub-rows field-group"><span class="field-label">What was happening right before?</span>
         <input class="field" type="text" data-action="lapse-note" data-arg="${l.key}" value="${esc(d.lapseNotes[l.key])}" placeholder="waiting for the kettle"></div>`;
+      out += `<div class="sub-rows field-group"><span class="field-label">What would help next time?</span>
+        <input class="field" type="text" data-action="lapse-help" data-arg="${l.key}" value="${esc(help[l.key])}" placeholder="optional"></div>`;
+      if (l.key === 'scroll') {
+        out += `<div class="sub-rows field-group"><span class="field-label">Minutes over, if you know</span>
+          <input class="field" style="font-size:16px" type="text" inputmode="numeric" pattern="[0-9]*" data-action="scroll-minutes" value="${minutes == null ? '' : minutes}" placeholder="optional"></div>`;
+      }
     }
     out += `</div>`;
   }
@@ -176,5 +187,7 @@ IT.registerChange({
 IT.registerInput({
   'note': (value) => { const d = IT.day(); d.note = value; IT.touch(); IT.saveSoon(); },
   'lapse-note': (value, arg) => { const d = IT.day(); d.lapseNotes[arg] = value; IT.touch(); IT.saveSoon(); },
+  'lapse-help': (value, arg) => { const d = IT.day(); if (!d.lapseHelp) d.lapseHelp = { scroll: '', porn: '', nag: '' }; d.lapseHelp[arg] = value; IT.touch(); IT.saveSoon(); },
+  'scroll-minutes': (value) => { const d = IT.day(); d.scrollMinutes = NightLogic.parseScrollMinutes(value); IT.touch(); IT.saveSoon(); },
 });
 })();

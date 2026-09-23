@@ -14,6 +14,7 @@
   'use strict';
 
   const NIGHT_CHECK_DEFAULT = { washed: false, tape: false };
+  const LAPSE_HELP_DEFAULT = { scroll: '', porn: '', nag: '' };
 
   // d.night = { washed, tape }, read with defaults (N1).
   function nightChecks(d) {
@@ -27,6 +28,25 @@
     if (!on.length) return null;
     return 'Rated: ' + on.map((r) => `${r.key} ${d.ratings[r.key]}`).join(' · ');
   }
+  // d.lapseHelp[key] = "what would help next time" (N2), read with defaults.
+  function lapseHelp(d) {
+    const h = (d && d.lapseHelp) || {};
+    return { scroll: h.scroll || '', porn: h.porn || '', nag: h.nag || '' };
+  }
+  // d.scrollMinutes: number or null (N2).
+  function scrollMinutes(d) {
+    const v = d && d.scrollMinutes;
+    return typeof v === 'number' && !Number.isNaN(v) ? v : null;
+  }
+  // Parse the "Minutes over" free-text field into scrollMinutes' stored shape:
+  // digits-only text becomes a number, an empty/non-numeric string becomes null.
+  function parseScrollMinutes(text) {
+    const digits = String(text == null ? '' : text).replace(/[^0-9]/g, '');
+    return digits === '' ? null : Number(digits);
+  }
 
-  return { NIGHT_CHECK_DEFAULT, nightChecks, ratingsSummaryText };
+  return {
+    NIGHT_CHECK_DEFAULT, LAPSE_HELP_DEFAULT,
+    nightChecks, ratingsSummaryText, lapseHelp, scrollMinutes, parseScrollMinutes,
+  };
 });
