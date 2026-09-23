@@ -13,7 +13,7 @@
   'use strict';
 
   const {
-    LAPSES, RATINGS, addDays, weekdayOf, weekStart, urgeDayKeyFor, allWeekKeys, nightCardDone,
+    LAPSES, RATINGS, addDays, weekdayOf, weekStart, urgeDayKeyFor, allWeekKeys, nightCardDone, dateOf,
   } = ITLogic;
 
   // ---------- word extraction (W1a) ----------
@@ -148,9 +148,25 @@
     };
   }
 
+  // ---------- W2: overall card ----------
+  function daysAgoText(state, todayKey, kind, label) {
+    const key = ITLogic.lastLapse(state, kind);
+    if (!key) return `No ${label} logged yet.`;
+    const since = Math.round((dateOf(todayKey) - dateOf(key)) / 86400000);
+    const when = since === 0 ? 'today' : `${since} ${since === 1 ? 'day' : 'days'} ago`;
+    return `Last ${label} logged ${when}.`;
+  }
+  function overallLines(state, todayKey) {
+    return {
+      porn: daysAgoText(state, todayKey, 'porn', 'porn slip'),
+      scroll: daysAgoText(state, todayKey, 'scroll', 'scrolling slip'),
+    };
+  }
+
   return {
     STOPWORDS, wordsFromText, topWords,
     windowKeys, windowUrges,
     triggerWords, urgeTimeBuckets, timeBucketFor, weekdaySlips, fourWeekStrip, weekBlock, patterns,
+    overallLines, daysAgoText,
   };
 });

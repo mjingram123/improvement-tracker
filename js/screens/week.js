@@ -5,8 +5,8 @@ const IT = window.IT;
 const { esc, bannerSvg } = IT.ui;
 const {
   LAPSES, RATINGS, DAY_NAMES,
-  weekStats: weekStatsPure, lastLapse: lastLapsePure, weekStart, addDays, weekdayOf,
-  allWeekKeys, fmtShort, fmtLong, dateOf, backupDueDays,
+  weekStats: weekStatsPure, weekStart, addDays, weekdayOf,
+  allWeekKeys, fmtShort, fmtLong, backupDueDays,
 } = window.ITLogic;
 // Until the Mind builder wires the <script> tag for logic-week.js into index.html,
 // this can be undefined - every use below is gated so the screen still renders.
@@ -15,7 +15,6 @@ const WL = window.ITLogicWeek;
 let weekCursor = null; // week start key being viewed
 
 function weekStats(start) { return weekStatsPure(IT.state, start, IT.todayKey()); }
-function lastLapse(kind) { return lastLapsePure(IT.state, kind); }
 function backupDue() { return backupDueDays(IT.state, Date.now()); }
 
 const chevronSvg = (dir) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${dir === 'l' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'}"/></svg>`;
@@ -74,6 +73,15 @@ function renderPatternsCard(today) {
   </div></section>`;
 }
 
+// ---------- W2: Overall card ----------
+function renderOverallCard(today) {
+  if (!WL) return '';
+  const lines = WL.overallLines(IT.state, today);
+  return `<section class="card"><h2>Overall</h2><div style="display:flex;flex-direction:column;gap:4px;margin-top:10px">
+    <p class="muted small">${esc(lines.porn)}</p><p class="muted small">${esc(lines.scroll)}</p>
+  </div></section>`;
+}
+
 function renderWeek(ctx) {
   const today = IT.todayKey();
   if (!weekCursor || (ctx && ctx.entering)) weekCursor = weekStart(today);
@@ -98,19 +106,18 @@ function renderWeek(ctx) {
   const needBackup = backupDue();
   const banner = needBackup ? `<div class="banner">${bannerSvg}No backup in ${needBackup} days. Make one in More, it takes ten seconds.</div>` : '';
 
-  // Patterns is relative to today (a fixed 28-day window), not to the navigated
-  // week, so it renders the same regardless of which week is on screen.
+  // Patterns and Overall are both relative to today (like the old porn line was),
+  // not to the navigated week, so they render the same regardless of which week
+  // is on screen.
   const patternsCard = renderPatternsCard(today);
+  const overallCard = renderOverallCard(today);
 
-  if (cur.n === 0) return `<div class="screen-14">${nav}${whyLine}${banner}${patternsCard}<section class="card"><p class="muted">Nothing logged yet for this week.</p></section></div>`;
+  if (cur.n === 0) return `<div class="screen-14">${nav}${whyLine}${banner}${patternsCard}<section class="card"><p class="muted">Nothing logged yet for this week.</p></section>${overallCard}</div>`;
 
   let slips = `<section class="card"><h2>Slips</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">`;
   for (const l of LAPSES) slips += rate(l.label, cur.lapses[l.key], cur.n, { prev: prev.logged ? prev.lapses[l.key] : null, prevN: prev.logged ? prev.n : null });
   slips += `<div class="card-divider"></div>
-    <div style="font-size:0.9375rem">Urges ridden out: <span style="font-weight:600;color:var(--green-700)">${cur.rode} rode · ${cur.gave} gave in</span></div>`;
-  const lp = lastLapse('porn');
-  const since = lp ? Math.round((dateOf(today) - dateOf(lp)) / 86400000) : null;
-  slips += `<p class="muted small">${lp ? `Last porn slip logged ${since === 0 ? 'today' : since + (since === 1 ? ' day ago' : ' days ago')}.` : 'No porn slips logged yet.'}</p></div></section>`;
+    <div style="font-size:0.9375rem">Urges ridden out: <span style="font-weight:600;color:var(--green-700)">${cur.rode} rode · ${cur.gave} gave in</span></div></div></section>`;
 
   let showed = `<section class="card"><h2>How I showed up</h2><div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${spark(cur.dayAvg)}
     <div class="spark-days">${allWeekKeys(start).map((k, i) => `<div><b>${cur.dayAvg[i] == null ? '·' : cur.dayAvg[i].toFixed(1)}</b><span>${DAY_NAMES[weekdayOf(k)]}</span></div>`).join('')}</div>
@@ -137,7 +144,7 @@ function renderWeek(ctx) {
   }).join('');
   const journal = `<section class="card"><h2>Journal</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">${entries || '<p class="muted small">Nothing written yet.</p>'}</div></section>`;
 
-  return `<div class="screen-14">${nav}${whyLine}${banner}${patternsCard}${slips}${showed}${routines}${journal}</div>`;
+  return `<div class="screen-14">${nav}${whyLine}${banner}${patternsCard}${slips}${showed}${routines}${journal}${overallCard}</div>`;
 }
 
 IT.registerScreen('week', { render: renderWeek });

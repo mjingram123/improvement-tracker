@@ -133,3 +133,23 @@ test('patterns: at or above 3 total returns full data', () => {
   assert.equal(p.ready, true);
   assert.ok(p.triggerWords && p.timeBuckets && p.weekdaySlips && p.fourWeekStrip);
 });
+
+// ---------- overallLines ----------
+test('overallLines: no slips ever logged', () => {
+  const s = makeState();
+  const lines = W.overallLines(s, '2026-09-22');
+  assert.equal(lines.porn, 'No porn slip logged yet.');
+  assert.equal(lines.scroll, 'No scrolling slip logged yet.');
+});
+test('overallLines: today, one day ago, and several days ago phrasing', () => {
+  const s = makeState();
+  setDay(s, '2026-09-22', { lapses: { scroll: false, porn: true, nag: false } });
+  setDay(s, '2026-09-21', { lapses: { scroll: true, porn: false, nag: false } });
+  let lines = W.overallLines(s, '2026-09-22');
+  assert.equal(lines.porn, 'Last porn slip logged today.');
+  assert.equal(lines.scroll, 'Last scrolling slip logged 1 day ago.');
+  setDay(s, '2026-09-15', { lapses: { scroll: true, porn: false, nag: false } });
+  s.days['2026-09-21'] = { ...L.defaultDay(), lapses: { scroll: false, porn: false, nag: false } };
+  lines = W.overallLines(s, '2026-09-22');
+  assert.equal(lines.scroll, 'Last scrolling slip logged 7 days ago.');
+});
