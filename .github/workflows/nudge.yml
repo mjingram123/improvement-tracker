@@ -1,37 +1,66 @@
 # Two daily check-in nudges via ntfy. Message text is fixed and generic on purpose.
-# Times are America/Los_Angeles; both UTC hours are scheduled and the job picks the right one.
+#
+# GitHub's cron routinely fires hours late, so this job does not try to run AT 9:00 or 22:00.
+# It runs early in the local day (two attempts, in case one is delayed) and asks ntfy to deliver
+# each message at the exact local time using the "At" header. A per-day cache key stops the
+# second attempt from scheduling duplicates. If a target time has already passed by more than
+# three hours when the job finally runs, that nudge is skipped for the day.
 name: check-in nudges
 on:
   schedule:
-    - cron: '3 16,17 * * *'   # 9:03 local (PDT or PST)
-    - cron: '3 5,6 * * *'     # 22:03 local (PDT or PST)
+    - cron: '17 9 * * *'    # 02:17 PDT / 01:17 PST
+    - cron: '17 13 * * *'   # 06:17 PDT / 05:17 PST (backup attempt)
   workflow_dispatch:
     inputs:
       which:
-        description: morning, night, or test
+        description: schedule (today's nudges), test (send now), morning, night
         default: test
 jobs:
   nudge:
     runs-on: ubuntu-latest
+    env:
+      TZ: America/Los_Angeles
+      CLICK: https://mjingram123.github.io/improvement-tracker/
     steps:
-      - name: Send nudge
+      - name: Local date
+        id: d
+        run: echo "day=$(date +%F)" >> "$GITHUB_OUTPUT"
+      - name: Dedupe marker
+        id: cache
+        if: github.event_name == 'schedule' || github.event.inputs.which == 'schedule'
+        uses: actions/cache@v4
+        with:
+          path: .nudged
+          key: nudged-${{ steps.d.outputs.day }}
+      - name: Send or schedule
         env:
           TOPIC: ${{ secrets.NTFY_TOPIC }}
           WHICH: ${{ github.event.inputs.which }}
+          HIT: ${{ steps.cache.outputs.cache-hit }}
+          DAY: ${{ steps.d.outputs.day }}
         run: |
           set -e
           if [ -z "$TOPIC" ]; then echo "NTFY_TOPIC secret missing"; exit 1; fi
-          H=$(TZ=America/Los_Angeles date +%-H)
-          if [ -z "$WHICH" ]; then
-            if [ "$H" = "9" ]; then WHICH=morning; elif [ "$H" = "22" ]; then WHICH=night; else echo "not a nudge hour locally ($H), skipping"; exit 0; fi
-          fi
-          case "$WHICH" in
-            morning) TITLE="Morning check-in"; BODY="Stretch, then log it." ;;
-            night)   TITLE="Night check-in";   BODY="Wind down and write one line." ;;
-            *)       TITLE="Test";             BODY="Nudges are connected." ;;
+          send() { # title body [at-epoch]
+            if [ -n "$3" ]; then AT=(-H "At: $3"); else AT=(); fi
+            curl -fsS -o /dev/null -H "Title: $1" -H "Priority: default" -H "Tags: white_check_mark" \
+              -H "Click: $CLICK" "${AT[@]}" -d "$2" "https://ntfy.sh/$TOPIC"
+            echo "queued: $1 ${3:+at $(date -d @$3 '+%H:%M %Z')}"
+          }
+          plan() { # title body local-time
+            TARGET=$(date -d "$DAY $3" +%s); NOW=$(date +%s)
+            if [ "$NOW" -lt "$TARGET" ]; then send "$1" "$2" "$TARGET"
+            elif [ $((NOW - TARGET)) -lt 10800 ]; then send "$1" "$2"
+            else echo "skip: $1 ($3 is more than 3h past)"; fi
+          }
+          case "${WHICH:-schedule}" in
+            morning) send "Morning check-in" "Stretch, then log it." ;;
+            night)   send "Night check-in" "Wind down and write one line." ;;
+            test)    send "Test" "Nudges are connected." ;;
+            schedule)
+              if [ "$HIT" = "true" ]; then echo "already scheduled for $DAY"; exit 0; fi
+              plan "Morning check-in" "Stretch, then log it." "09:00"
+              plan "Night check-in" "Wind down and write one line." "22:00"
+              mkdir -p .nudged && echo "$DAY" > .nudged/done ;;
+            *) echo "unknown input: $WHICH"; exit 1 ;;
           esac
-          curl -fsS -o /dev/null \
-            -H "Title: $TITLE" -H "Priority: default" -H "Tags: white_check_mark" \
-            -H "Click: https://mjingram123.github.io/improvement-tracker/" \
-            -d "$BODY" "https://ntfy.sh/$TOPIC"
-          echo "sent: $TITLE"
