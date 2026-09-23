@@ -118,7 +118,10 @@
         nightVisited: Array.isArray(v.nightVisited) ? Array.from({ length: 4 }, (_, i) => !!v.nightVisited[i]) : dd.nightVisited.slice(),
       };
     }
-    out.urges = Array.isArray(s.urges) ? s.urges.filter((u) => u && u.id && u.at) : [];
+    // endsAt is epoch ms (like windDown.endsAt); older saves wrote it as an ISO
+    // string, so convert those on the way in. `at` and `resolvedAt` stay ISO strings.
+    out.urges = Array.isArray(s.urges) ? s.urges.filter((u) => u && u.id && u.at).map((u) =>
+      typeof u.endsAt === 'string' ? { ...u, endsAt: Number(new Date(u.endsAt)) } : u) : [];
     return out;
   }
 

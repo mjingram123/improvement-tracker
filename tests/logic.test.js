@@ -137,6 +137,22 @@ test('normalize: junk urges (missing id/at) are filtered out', () => {
   assert.equal(out.urges.length, 1);
   assert.equal(out.urges[0].id, 'a');
 });
+test('normalize: a string urge.endsAt (old format) is converted to epoch ms', () => {
+  const iso = '2026-09-07T10:10:00.000Z';
+  const out = L.normalize({ urges: [{ id: 'a', at: '2026-09-07T10:00:00.000Z', endsAt: iso }] });
+  assert.equal(typeof out.urges[0].endsAt, 'number');
+  assert.equal(out.urges[0].endsAt, new Date(iso).getTime());
+});
+test('normalize: a numeric urge.endsAt (current format) passes through unchanged', () => {
+  const ms = 1234567890;
+  const out = L.normalize({ urges: [{ id: 'a', at: '2026-09-07T10:00:00.000Z', endsAt: ms }] });
+  assert.equal(out.urges[0].endsAt, ms);
+});
+test('normalize: urge.at and resolvedAt stay ISO strings, only endsAt is converted', () => {
+  const out = L.normalize({ urges: [{ id: 'a', at: '2026-09-07T10:00:00.000Z', endsAt: '2026-09-07T10:10:00.000Z', resolvedAt: '2026-09-07T10:11:00.000Z' }] });
+  assert.equal(out.urges[0].at, '2026-09-07T10:00:00.000Z');
+  assert.equal(out.urges[0].resolvedAt, '2026-09-07T10:11:00.000Z');
+});
 test('normalize: partial settings.onboarding merges with defaults', () => {
   const out = L.normalize({ settings: { onboarding: { home: true } } });
   assert.deepEqual(out.settings.onboarding, { home: true, shortcuts: false, backup: false });

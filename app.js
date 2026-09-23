@@ -599,7 +599,7 @@ function renderUrgeIdle() {
     ${renderUrgeLog()}`;
 }
 function renderUrgeRunning(u) {
-  const left = new Date(u.endsAt).getTime() - Date.now();
+  const left = u.endsAt - Date.now();
   const over = left <= 0;
   const kind = u.kind === 'porn' ? 'Porn' : 'Scrolling';
   return `<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
@@ -644,7 +644,7 @@ function updateUrgeButton() {
   const label = $('.urge-label', ub);
   const u = pendingUrge();
   if (u) {
-    const left = new Date(u.endsAt).getTime() - Date.now();
+    const left = u.endsAt - Date.now();
     label.textContent = left > 0 ? `Riding it out · ${mmss(left)}` : 'Riding it out';
     ub.classList.add('running');
   } else {
@@ -666,7 +666,7 @@ function autosize() {
   document.querySelectorAll('textarea.field').forEach((t) => { t.style.height = 'auto'; t.style.height = Math.max(48, t.scrollHeight) + 'px'; });
 }
 function ensureTick() {
-  const active = (day().windDown.endsAt && !day().windDown.done) || state.urges.some((u) => !u.outcome && new Date(u.endsAt).getTime() > Date.now());
+  const active = (day().windDown.endsAt && !day().windDown.done) || state.urges.some((u) => !u.outcome && u.endsAt > Date.now());
   if (active && !tickHandle) tickHandle = setInterval(tick, 1000);
   if (!active && tickHandle) { clearInterval(tickHandle); tickHandle = null; }
 }
@@ -691,7 +691,7 @@ function tick() {
   let rerender = false;
   state.urges.forEach((u) => {
     if (u.outcome) return;
-    const left = new Date(u.endsAt).getTime() - Date.now();
+    const left = u.endsAt - Date.now();
     if (left <= 0) rerender = true; else updateRing('urge-ring', left, URGE_MIN * 60000);
   });
   updateUrgeButton();
@@ -736,7 +736,7 @@ document.addEventListener('click', (e) => {
     case 'urge-start': {
       const trigger = ($('#urge-trigger')?.value || '').trim().slice(0, 80);
       const now = Date.now();
-      state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: urgeKind, trigger, endsAt: new Date(now + URGE_MIN * 60000).toISOString(), outcome: null });
+      state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: urgeKind, trigger, endsAt: now + URGE_MIN * 60000, outcome: null });
       state.meta.updatedAt = now; save(); renderUrgeOverlay(); render(); ntfyTimerPing('10m'); break;
     }
     case 'urge-outcome': {
