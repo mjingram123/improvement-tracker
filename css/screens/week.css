@@ -24,3 +24,45 @@
 .entry .d { font-size: 0.75rem; color: var(--muted); font-weight: 500; letter-spacing: .03em; }
 .entry .q { color: var(--text); font-size: 0.9375rem; line-height: 1.4; }
 .entry .note { font-size: 0.8125rem; color: var(--muted); font-style: italic; }
+
+/* Patterns card (W1) - every mark below uses --blue as the single data hue. */
+.kicker-caps:not(:first-child) { margin-top: 2px; }
+.pattern-list { display: flex; flex-direction: column; gap: 6px; }
+.pattern-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 0.875rem; }
+.pattern-label { color: var(--muted); flex: none; }
+.pattern-value { color: var(--text); text-align: right; }
+.pattern-value b { font-weight: 600; }
+.mini-bars { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; align-items: end; }
+.mini-bar-col { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.mini-bar-track { width: 100%; height: 40px; background: var(--card2); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
+.mini-bar-fill { width: 100%; background: var(--blue); border-radius: 6px 6px 0 0; }
+.mini-n { font-size: 0.75rem; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+.mini-label { font-size: 0.625rem; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+.wd-row { display: flex; flex-direction: column; gap: 6px; }
+.wd-row-label { font-size: 0.8125rem; font-weight: 500; color: var(--text); }
+.strip-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.strip-block { background: var(--card2); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 3px; }
+.strip-range { font-size: 0.6875rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; margin-bottom: 2px; }
+.strip-stat { font-size: 0.6875rem; color: var(--text); }
+.entry .note.help { margin-left: 6px; }
+.meta.insight { margin-top: 4px; }
+
+/* Patterns card (W1) - every mark below uses --blue as the single data hue. */
+.kicker-caps:not(:first-child) { margin-top: 2px; }
+.pattern-list { display: flex; flex-direction: column; gap: 6px; }
+.pattern-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 0.875rem; }
+.pattern-label { color: var(--muted); flex: none; }
+.pattern-value { color: var(--text); text-align: right; }
+.pattern-value b { font-weight: 600; }
+.mini-bars { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; align-items: end; }
+.mini-bar-col { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.mini-bar-track { width: 100%; height: 40px; background: var(--card2); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
+.mini-bar-fill { width: 100%; background: var(--blue); border-radius: 6px 6px 0 0; }
+.mini-n { font-size: 0.75rem; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+.mini-label { font-size: 0.625rem; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+.wd-row { display: flex; flex-direction: column; gap: 6px; }
+.wd-row-label { font-size: 0.8125rem; font-weight: 500; color: var(--text); }
+.strip-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.strip-block { background: var(--card2); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 3px; }
+.strip-range { font-size: 0.6875rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; margin-bottom: 2px; }
+.strip-stat { font-size: 0.6875rem; color: var(--text); }
