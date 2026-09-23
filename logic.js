@@ -81,34 +81,47 @@
       lapses: { scroll: false, porn: false, nag: false }, lapseNotes: { scroll: '', porn: '', nag: '' },
       ratings: { curiosity: 0, story: 0, pauses: 0, present: 0 },
       note: '', windDown: { endsAt: null, done: false },
+      // Which of the 4 night-flow steps have been visited this day. Lives on the day
+      // object (not sessionStorage) so it survives an iOS process eviction/relaunch.
+      nightVisited: [false, false, false, false],
     };
   }
+  // True only for a plain data object - excludes null, arrays, and scalars, all of
+  // which spread by index/charcode into an object and silently corrupt state
+  // (e.g. normalize({ days: { k: { hangover: 'oops' } } }) used to yield
+  // hangover: {0:'o',1:'o',2:'p',3:'s'}). Every nested spread below guards with this.
+  function isPlainObject(v) { return typeof v === 'object' && v !== null && !Array.isArray(v); }
   function normalize(s) {
     const d = defaultState();
-    if (!s || typeof s !== 'object') return d;
+    if (!isPlainObject(s)) return d;
     const out = { ...d, ...s };
-    out.settings = { ...d.settings, ...(s.settings || {}) };
-    out.settings.onboarding = { ...d.settings.onboarding, ...((s.settings && s.settings.onboarding) || {}) };
-    const incIntentions = (s.settings && s.settings.intentions) || {};
+    const sSettings = isPlainObject(s.settings) ? s.settings : {};
+    out.settings = { ...d.settings, ...sSettings };
+    out.settings.onboarding = { ...d.settings.onboarding, ...(isPlainObject(sSettings.onboarding) ? sSettings.onboarding : {}) };
+    const incIntentions = isPlainObject(sSettings.intentions) ? sSettings.intentions : {};
     out.settings.intentions = {
       ...d.settings.intentions, ...incIntentions,
-      notes: { ...d.settings.intentions.notes, ...(incIntentions.notes || {}) },
+      notes: { ...d.settings.intentions.notes, ...(isPlainObject(incIntentions.notes) ? incIntentions.notes : {}) },
     };
-    out.meta = { ...d.meta, ...(s.meta || {}) };
+    out.meta = { ...d.meta, ...(isPlainObject(s.meta) ? s.meta : {}) };
     out.days = {};
     for (const [k, v] of Object.entries(s.days || {})) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !v || typeof v !== 'object') continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !isPlainObject(v)) continue;
       const dd = defaultDay();
       out.days[k] = {
         ...dd, ...v,
-        hangover: { ...dd.hangover, ...(v.hangover || {}) },
-        lapses: { ...dd.lapses, ...(v.lapses || {}) },
-        lapseNotes: { ...dd.lapseNotes, ...(v.lapseNotes || {}) },
-        ratings: { ...dd.ratings, ...(v.ratings || {}) },
-        windDown: { ...dd.windDown, ...(v.windDown || {}) },
+        hangover: { ...dd.hangover, ...(isPlainObject(v.hangover) ? v.hangover : {}) },
+        lapses: { ...dd.lapses, ...(isPlainObject(v.lapses) ? v.lapses : {}) },
+        lapseNotes: { ...dd.lapseNotes, ...(isPlainObject(v.lapseNotes) ? v.lapseNotes : {}) },
+        ratings: { ...dd.ratings, ...(isPlainObject(v.ratings) ? v.ratings : {}) },
+        windDown: { ...dd.windDown, ...(isPlainObject(v.windDown) ? v.windDown : {}) },
+        nightVisited: Array.isArray(v.nightVisited) ? Array.from({ length: 4 }, (_, i) => !!v.nightVisited[i]) : dd.nightVisited.slice(),
       };
     }
-    out.urges = Array.isArray(s.urges) ? s.urges.filter((u) => u && u.id && u.at) : [];
+    // endsAt is epoch ms (like windDown.endsAt); older saves wrote it as an ISO
+    // string, so convert those on the way in. `at` and `resolvedAt` stay ISO strings.
+    out.urges = Array.isArray(s.urges) ? s.urges.filter((u) => u && u.id && u.at).map((u) =>
+      typeof u.endsAt === 'string' ? { ...u, endsAt: Number(new Date(u.endsAt)) } : u) : [];
     return out;
   }
 
@@ -149,21 +162,60 @@
     if (!json) return null;
     try { const v = JSON.parse(json); return v && typeof v === 'object' ? v : null; } catch { return null; }
   }
+  // An incoming urge record (same id) replaces the local one when it resolves an
+  // unresolved local urge, or when it carries a strictly newer resolvedAt.
+  function shouldReplaceUrge(local, incoming) {
+    if (incoming.outcome && !local.outcome) return true;
+    if (incoming.resolvedAt) {
+      if (!local.resolvedAt) return true;
+      if (new Date(incoming.resolvedAt) > new Date(local.resolvedAt)) return true;
+    }
+    return false;
+  }
+  // Union two urge lists by id. Returns the merged, at-sorted list plus a count of
+  // ids that were newly added or replaced (used for the urgesMerged stat).
+  function unionUrges(localUrges, incomingUrges) {
+    const byId = new Map((localUrges || []).map((u) => [u.id, u]));
+    let merged = 0;
+    for (const u of (incomingUrges || [])) {
+      const cur = byId.get(u.id);
+      if (!cur) { byId.set(u.id, u); merged++; }
+      else if (shouldReplaceUrge(cur, u)) { byId.set(u.id, u); merged++; }
+    }
+    const urges = Array.from(byId.values()).sort((a, b) => new Date(a.at) - new Date(b.at));
+    return { urges, merged };
+  }
   function mergeInto(state, rawText) {
     const parsed = parseSafe(rawText);
     const inc = parsed && parsed.state ? parsed.state : parsed;
     if (!inc || (!inc.days && !inc.urges)) throw new Error('not a tracker export');
     const incoming = normalize(inc);
-    let daysMerged = 0, urgesMerged = 0;
+    let daysMerged = 0;
     for (const [k, v] of Object.entries(incoming.days)) {
       const cur = state.days[k];
       if (!cur || (v.u || 0) > (cur.u || 0)) { state.days[k] = v; daysMerged++; }
     }
-    const ids = new Set(state.urges.map((u) => u.id));
-    for (const u of incoming.urges) if (!ids.has(u.id)) { state.urges.push(u); urgesMerged++; }
-    state.urges.sort((a, b) => new Date(a.at) - new Date(b.at));
+    const { urges, merged: urgesMerged } = unionUrges(state.urges, incoming.urges);
+    state.urges = urges;
     if (!state.settings.lastExport && incoming.settings.lastExport) state.settings.lastExport = incoming.settings.lastExport;
     return { daysMerged, urgesMerged };
+  }
+  // Cross-instance merge: combine this page's in-memory state with a version another
+  // same-origin tab just wrote to localStorage. Pure - returns a new state, never
+  // mutates either argument. Days: newer `u` wins. Urges: unioned by id (see
+  // unionUrges). Settings/meta: taken wholesale from whichever side has the newer
+  // meta.updatedAt.
+  function mergeStates(local, incoming) {
+    const days = { ...(local.days || {}) };
+    for (const [k, v] of Object.entries(incoming.days || {})) {
+      const cur = days[k];
+      if (!cur || (v.u || 0) > (cur.u || 0)) days[k] = v;
+    }
+    const { urges } = unionUrges(local.urges, incoming.urges);
+    const localUpdated = (local.meta && local.meta.updatedAt) || 0;
+    const incomingUpdated = (incoming.meta && incoming.meta.updatedAt) || 0;
+    const newer = incomingUpdated > localUpdated ? incoming : local;
+    return { ...local, days, urges, settings: newer.settings, meta: newer.meta };
   }
 
   // ---------- backup nag ----------
@@ -187,20 +239,20 @@
   function nightCardDone(d) {
     return !!(d.windDown.done || RATINGS.some((r) => d.ratings[r.key] > 0) || (d.note && d.note.trim().length > 0));
   }
-  // Step completeness for the 4-step flow. `visited` is the sessionStorage-tracked
-  // array of 4 booleans (step 1, Slips, has no data-only signal: turning zero slips on
-  // is a valid, complete answer, so it relies on the visited flag instead).
-  function nightStepDone(d, visited, i) {
+  // Step completeness for the 4-step flow. Step 1 (Slips) has no data-only signal:
+  // turning zero slips on is a valid, complete answer, so it relies on d.nightVisited
+  // instead - persisted on the day object so it survives an iOS process eviction.
+  function nightStepDone(d, i) {
     switch (i) {
       case 0: return !!(d.windDown && d.windDown.done);
-      case 1: return !!(visited && visited[1]);
+      case 1: return !!(d.nightVisited && d.nightVisited[1]);
       case 2: return RATINGS.some((r) => d.ratings[r.key] > 0);
       case 3: return !!(d.note && d.note.trim().length > 0);
       default: return false;
     }
   }
-  function firstIncompleteNightStep(d, visited) {
-    for (let i = 0; i < 4; i++) if (!nightStepDone(d, visited, i)) return i;
+  function firstIncompleteNightStep(d) {
+    for (let i = 0; i < 4; i++) if (!nightStepDone(d, i)) return i;
     return 0;
   }
 
@@ -240,9 +292,9 @@
   return {
     LAPSES, RATINGS, HANGOVER, DAY_NAMES, MONTHS,
     pad, keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
-    todayKeyFor, urgeDayKeyFor,
+    todayKeyFor, urgeDayKeyFor, allWeekKeys,
     defaultState, defaultDay, normalize,
-    weekStats, lastLapse, mergeInto, backupDueDays,
+    weekStats, lastLapse, parseSafe, mergeInto, mergeStates, backupDueDays,
     defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
     recentUrges, fmtTime, fmtHour12, dayEndOptions, shortcutsUiVisible,
   };

@@ -7,9 +7,10 @@ const {
   LAPSES, RATINGS, HANGOVER, DAY_NAMES,
   keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
   todayKeyFor, defaultState, defaultDay, normalize,
-  weekStats: weekStatsPure, lastLapse: lastLapsePure, mergeInto, backupDueDays,
+  weekStats: weekStatsPure, lastLapse: lastLapsePure, mergeInto, mergeStates, backupDueDays,
   defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
   recentUrges, fmtTime, dayEndOptions, shortcutsUiVisible,
+  allWeekKeys, parseSafe,
 } = window.ITLogic;
 
 // ---------- constants ----------
@@ -30,7 +31,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 function todayKey() { return todayKeyFor(new Date(), state.settings.rolloverHour); }
-function weekKeys(start) { return Array.from({ length: 7 }, (_, i) => addDays(start, i)); }
 
 // ---------- icons ----------
 const checkSvg = (size = 14) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>`;
@@ -103,10 +103,6 @@ async function idbDelete(keys) {
 }
 
 // ---------- persistence ----------
-function parseSafe(json) {
-  if (!json) return null;
-  try { const v = JSON.parse(json); return v && typeof v === 'object' ? v : null; } catch { return null; }
-}
 async function loadState() {
   let ls = null, prev = null, idb = null;
   try { ls = parseSafe(localStorage.getItem(LS_KEY)); prev = parseSafe(localStorage.getItem(LS_PREV)); storageHealth.ls = 'ok'; }
@@ -124,34 +120,56 @@ async function loadState() {
     state = normalize(best.s);
     if (best.src && best.s !== ls) restoredFrom = best.src;
   }
+  lastWrittenAt = state.meta.updatedAt || 0;
   try { navigator.storage?.persist?.(); } catch {}
   try {
     if (navigator.storage?.persisted) storageHealth.persisted = (await navigator.storage.persisted()) ? 'granted' : 'not granted';
     else storageHealth.persisted = 'unknown';
   } catch { storageHealth.persisted = 'unknown'; }
 }
+// Toast at most once every 10 minutes when a write fails; the Storage health row
+// (More > Storage health) always shows the latest error text regardless.
+let lastFailToastAt = 0;
+function reportWriteFailure() {
+  const now = Date.now();
+  if (now - lastFailToastAt > 10 * 60 * 1000) {
+    lastFailToastAt = now;
+    toast('Could not save. Back up now from More.');
+  }
+}
+// The updatedAt this page last wrote to (or loaded from) localStorage. Used by
+// save() to detect that another same-origin tab has written since, so its edits
+// get merged in rather than clobbered by this page's full-state overwrite.
+let lastWrittenAt = 0;
 let saveTimer = null;
 function save() {
   state.meta.updatedAt = Math.max(state.meta.updatedAt || 0, Date.now());
+  let cur = null;
+  try { cur = localStorage.getItem(LS_KEY); } catch {}
+  const curState = parseSafe(cur);
+  if (curState && curState.meta && (curState.meta.updatedAt || 0) > lastWrittenAt) {
+    state = mergeStates(state, normalize(curState));
+    state.meta.updatedAt = Math.max(state.meta.updatedAt || 0, Date.now());
+  }
   const json = JSON.stringify(state);
   try {
-    const cur = localStorage.getItem(LS_KEY);
     if (cur && cur !== json) localStorage.setItem(LS_PREV, cur);
     localStorage.setItem(LS_KEY, json);
     storageHealth.ls = 'ok';
-  } catch { storageHealth.ls = 'write failed'; }
+  } catch (err) { storageHealth.ls = String((err && err.message) || err || 'write failed'); reportWriteFailure(); }
+  lastWrittenAt = state.meta.updatedAt;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => mirror(json), 400);
 }
 async function mirror(json) {
   try {
-    const snapKey = `snap:${keyOf(new Date())}`;
+    const snapKey = `snap:${todayKeyFor(new Date(), state.settings.rolloverHour)}`;
     await idbPut([['current', JSON.parse(json)], [snapKey, JSON.parse(json)]]);
     storageHealth.idb = 'ok';
     const keys = (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort();
     storageHealth.snaps = keys.length;
     if (keys.length > SNAP_KEEP) await idbDelete(keys.slice(0, keys.length - SNAP_KEEP));
-  } catch { storageHealth.idb = 'write failed'; }
+  } catch (err) { storageHealth.idb = String((err && err.message) || err || 'write failed'); reportWriteFailure(); }
 }
 
 // ---------- export / import ----------
@@ -299,14 +317,15 @@ function renderDay() {
 }
 
 // ---------- Night ----------
+// Only the current step index and the "forced flow" (editing from summary) flag
+// live here; which steps are complete lives on the day object (d.nightVisited) so
+// it survives an iOS process eviction/relaunch, not just a fresh sessionStorage.
 const NIGHT_UI_KEY = 'it:nightUi';
 function loadNightUi() {
   let st = null;
   try { st = JSON.parse(sessionStorage.getItem(NIGHT_UI_KEY) || 'null'); } catch {}
   const key = todayKey();
-  if (!st || st.day !== key || !Array.isArray(st.visited) || st.visited.length !== 4) {
-    st = { day: key, visited: [false, false, false, false], step: null, forceFlow: false };
-  }
+  if (!st || st.day !== key) st = { day: key, step: null, forceFlow: false };
   return st;
 }
 function saveNightUi(st) {
@@ -394,10 +413,10 @@ function renderNight() {
   const key = todayKey();
   const d = day(key);
   const st = loadNightUi();
-  const allVisited = st.visited.every(Boolean);
+  const allVisited = d.nightVisited.every(Boolean);
   const showSummary = !st.forceFlow && (allVisited || nightCardDone(d));
   if (showSummary) return renderNightSummary(d, key);
-  if (st.step == null) { st.step = firstIncompleteNightStep(d, st.visited); saveNightUi(st); }
+  if (st.step == null) { st.step = firstIncompleteNightStep(d); saveNightUi(st); }
   return renderNightFlow(d, st);
 }
 
@@ -449,7 +468,7 @@ function renderWeek() {
   slips += `<p class="muted small">${lp ? `Last porn slip logged ${since === 0 ? 'today' : since + (since === 1 ? ' day ago' : ' days ago')}.` : 'No porn slips logged yet.'}</p></div></section>`;
 
   let showed = `<section class="card"><h2>How I showed up</h2><div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${spark(cur.dayAvg)}
-    <div class="spark-days">${weekKeys(start).map((k, i) => `<div><b>${cur.dayAvg[i] == null ? '·' : cur.dayAvg[i].toFixed(1)}</b><span>${DAY_NAMES[weekdayOf(k)]}</span></div>`).join('')}</div>
+    <div class="spark-days">${allWeekKeys(start).map((k, i) => `<div><b>${cur.dayAvg[i] == null ? '·' : cur.dayAvg[i].toFixed(1)}</b><span>${DAY_NAMES[weekdayOf(k)]}</span></div>`).join('')}</div>
     <div class="card-divider"></div>`;
   for (const r of RATINGS) {
     const v = cur.ratingAvg[r.key], p = prev.ratingAvg[r.key];
@@ -546,6 +565,7 @@ function renderMore() {
     <p class="muted small" style="margin-top:10px">This app never sends notifications on its own. Two daily nudges come from a scheduled ntfy push, not the app; wind-down and urge timers can also ping your phone directly, even locked.</p>
     <div class="field-group" style="margin-top:12px"><span class="field-label">ntfy topic</span>
       <input class="field" type="text" id="ntfy-topic" data-action="ntfy-topic" value="${esc(s.ntfyTopic)}" placeholder="improve-yourname-1234"></div>
+    <p class="muted small" style="margin-top:6px">Anyone who guesses the topic can read it, so keep it long and random.</p>
     <div class="btn-row" style="margin-top:10px"><button class="btn" type="button" data-action="ntfy-test" ${s.ntfyTopic ? '' : 'disabled'}>Send test</button></div>
     ${toggleRow({ label: 'Timer pings', hint: 'Pings 15 or 10 minutes after a timer starts. Cancelling the timer cannot recall the ping.', checked: s.ntfyTimers, action: 'settings-bool', arg: 'ntfyTimers' })}
     ${scVisible ? `<div style="margin-top:6px">${toggleRow({ label: 'Shortcut timers', hint: 'If you make Shortcuts named Wind Down and Ride It Out that start a 15 and 10 minute timer, the app can launch them.', checked: s.useShortcutTimers, action: 'settings-bool', arg: 'useShortcutTimers' })}</div>` : ''}
@@ -580,7 +600,7 @@ function renderUrgeIdle() {
     ${renderUrgeLog()}`;
 }
 function renderUrgeRunning(u) {
-  const left = new Date(u.endsAt).getTime() - Date.now();
+  const left = u.endsAt - Date.now();
   const over = left <= 0;
   const kind = u.kind === 'porn' ? 'Porn' : 'Scrolling';
   return `<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
@@ -625,7 +645,7 @@ function updateUrgeButton() {
   const label = $('.urge-label', ub);
   const u = pendingUrge();
   if (u) {
-    const left = new Date(u.endsAt).getTime() - Date.now();
+    const left = u.endsAt - Date.now();
     label.textContent = left > 0 ? `Riding it out · ${mmss(left)}` : 'Riding it out';
     ub.classList.add('running');
   } else {
@@ -647,7 +667,7 @@ function autosize() {
   document.querySelectorAll('textarea.field').forEach((t) => { t.style.height = 'auto'; t.style.height = Math.max(48, t.scrollHeight) + 'px'; });
 }
 function ensureTick() {
-  const active = (day().windDown.endsAt && !day().windDown.done) || state.urges.some((u) => !u.outcome && new Date(u.endsAt).getTime() > Date.now());
+  const active = (day().windDown.endsAt && !day().windDown.done) || state.urges.some((u) => !u.outcome && u.endsAt > Date.now());
   if (active && !tickHandle) tickHandle = setInterval(tick, 1000);
   if (!active && tickHandle) { clearInterval(tickHandle); tickHandle = null; }
 }
@@ -672,7 +692,7 @@ function tick() {
   let rerender = false;
   state.urges.forEach((u) => {
     if (u.outcome) return;
-    const left = new Date(u.endsAt).getTime() - Date.now();
+    const left = u.endsAt - Date.now();
     if (left <= 0) rerender = true; else updateRing('urge-ring', left, URGE_MIN * 60000);
   });
   updateUrgeButton();
@@ -701,16 +721,14 @@ document.addEventListener('click', (e) => {
     case 'rate': { const [k, n] = arg.split(':'); d.ratings[k] = d.ratings[k] === Number(n) ? 0 : Number(n); touch(); save(); render(); break; }
     case 'winddown-start': d.windDown.endsAt = Date.now() + WIND_DOWN_MIN * 60000; d.windDown.done = false; touch(); save(); render(); ntfyTimerPing('15m'); break;
     case 'winddown-cancel': d.windDown.endsAt = null; touch(); save(); render(); break;
-    case 'winddown-reset': d.windDown.done = false; touch(); save(); render(); break;
     case 'night-goto': { const st = loadNightUi(); st.step = Number(arg); saveNightUi(st); render(); break; }
     case 'night-next':
     case 'night-skip': {
       const st = loadNightUi();
-      st.visited[st.step] = true;
+      d.nightVisited[st.step] = true; touch(); save();
       if (st.step < 3) st.step += 1; else st.forceFlow = false;
       saveNightUi(st); render(); break;
     }
-    case 'night-back': { const st = loadNightUi(); if (st.step > 0) st.step -= 1; saveNightUi(st); render(); break; }
     case 'night-edit': { const st = loadNightUi(); st.step = Number(arg); st.forceFlow = true; saveNightUi(st); render(); break; }
     case 'night-summary': { const st = loadNightUi(); st.forceFlow = false; saveNightUi(st); render(); break; }
     case 'urge-open': openUrgeOverlay(); break;
@@ -719,7 +737,7 @@ document.addEventListener('click', (e) => {
     case 'urge-start': {
       const trigger = ($('#urge-trigger')?.value || '').trim().slice(0, 80);
       const now = Date.now();
-      state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: urgeKind, trigger, endsAt: new Date(now + URGE_MIN * 60000).toISOString(), outcome: null });
+      state.urges.push({ id: uid(), at: new Date(now).toISOString(), kind: urgeKind, trigger, endsAt: now + URGE_MIN * 60000, outcome: null });
       state.meta.updatedAt = now; save(); renderUrgeOverlay(); render(); ntfyTimerPing('10m'); break;
     }
     case 'urge-outcome': {
@@ -787,8 +805,36 @@ document.addEventListener('input', (e) => {
   }
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#urge-overlay').hidden) closeUrgeOverlay(); });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); else { clearTimeout(noteTimer); save(); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { render(); }
+  else {
+    clearTimeout(noteTimer); save();
+    clearTimeout(saveTimer); mirror(JSON.stringify(state)); // eager mirror flush; pagehide below is a second, later safety net
+  }
+});
 window.addEventListener('pagehide', () => { clearTimeout(noteTimer); save(); clearTimeout(saveTimer); mirror(JSON.stringify(state)); });
+
+// ---------- cross-instance sync (another same-origin tab/window wrote it:state:v1) ----------
+function isTextFieldFocused() {
+  const el = document.activeElement;
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+}
+let pendingRenderOnBlur = false;
+window.addEventListener('storage', (e) => {
+  if (e.key !== LS_KEY || !e.newValue) return;
+  const incoming = parseSafe(e.newValue);
+  if (!incoming) return;
+  state = mergeStates(state, normalize(incoming));
+  if (isTextFieldFocused()) pendingRenderOnBlur = true;
+  else render();
+});
+document.addEventListener('blur', (e) => {
+  const t = e.target;
+  if (pendingRenderOnBlur && t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) {
+    pendingRenderOnBlur = false;
+    render();
+  }
+}, true);
 
 // ---------- boot ----------
 loadState().then(() => {
