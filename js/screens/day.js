@@ -55,7 +55,6 @@ function renderDay() {
   card += `</section>`;
 
   const rows = [];
-  if (s.waterPoloDays.includes(wd)) rows.push(checkRow({ label: 'Water polo', checked: d.waterPolo, action: 'day-bool', arg: 'waterPolo' }));
   if (s.dinnerDays.includes(wd)) rows.push(checkRow({ label: 'Dinner out', checked: d.dinnerOut, action: 'day-bool', arg: 'dinnerOut' }));
   rows.push(checkRow({ label: 'Gym', hint: 'log it when it happens', checked: d.gym, action: 'day-bool', arg: 'gym' }));
   const commit = `<div class="kicker-caps" style="padding:0 4px">Commitments</div><section class="card list">${rows.join('')}</section>`;
