@@ -1,0 +1,26 @@
+/* Improvement Tracker - Week screen only. */
+.weeklabel { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 1.375rem; color: var(--text); }
+.weeknav { display: flex; align-items: center; justify-content: space-between; }
+.weeknav button { width: 44px; height: 44px; border-radius: 22px; border: 0; background: transparent; color: var(--text); display: flex; align-items: center; justify-content: center; position: relative; }
+.weeknav button:disabled { opacity: .3; }
+.weeknav button::after { content: ""; position: absolute; inset: 0; }
+.stat { display: flex; flex-direction: column; gap: 6px; }
+.stat .line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 0.9375rem; color: var(--text); }
+.stat .val { font-variant-numeric: tabular-nums; font-weight: 500; }
+.stat .cmp { color: var(--muted); font-size: 0.8125rem; }
+.bar { height: 6px; background: var(--card2); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--blue); border-radius: 3px; transition: width .2s; }
+.card-divider { height: 1px; background: var(--border); }
+.spark { width: 100%; height: 64px; display: block; overflow: visible; }
+.spark-days { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+.spark-days div { display: flex; flex-direction: column; gap: 2px; }
+.spark-days b { font-size: 0.875rem; font-weight: 500; color: var(--text); }
+.spark-days span { font-size: 0.75rem; color: var(--muted); }
+.dim-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 0.9375rem; color: var(--text); }
+.dim-row .label { flex: 1; }
+.dim-row .this { font-weight: 500; }
+.dim-row .last { font-size: 0.8125rem; color: var(--muted); width: 72px; text-align: right; flex: none; }
+.entry { display: flex; flex-direction: column; gap: 4px; }
+.entry .d { font-size: 0.75rem; color: var(--muted); font-weight: 500; letter-spacing: .03em; }
+.entry .q { color: var(--text); font-size: 0.9375rem; line-height: 1.4; }
+.entry .note { font-size: 0.8125rem; color: var(--muted); font-style: italic; }

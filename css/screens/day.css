@@ -1,0 +1,8 @@
+/* Improvement Tracker - Day screen only: hangover kit chips. */
+.kitchips { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 12px; }
+.kitchip { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px 0 8px; border: 0; border-radius: 22px; background: var(--card2); color: var(--text); font-size: 0.9375rem; font-weight: 500; }
+.kitchip[aria-pressed="true"] { background: var(--green-soft); color: var(--green-700); }
+.kitchip .dot { width: 22px; height: 22px; border-radius: 11px; border: 2px solid var(--border); display: grid; place-items: center; color: #fff; flex: none; }
+.kitchip[aria-pressed="true"] .dot { background: var(--green); border-color: var(--green); }
+.kitchip .dot svg { width: 12px; height: 12px; visibility: hidden; }
+.kitchip[aria-pressed="true"] .dot svg { visibility: visible; }
