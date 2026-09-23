@@ -2,22 +2,41 @@
 
 Ordered. Top is next. Each ticket has a done condition. Bugs from QA go to the top.
 
-## Now (cycle 7: product and UX, from ANALYSIS.md)
+## Now (wave 1: six parallel builders, one per screen; see CONTRACTS.md)
 
-- [ ] P1 Link urge outcomes to Night slips. "Gave in" on a porn or scrolling urge sets that day's matching lapse flag (day chosen with the rollover rule from the urge's time) and, if the lapse note is empty, copies the trigger into it. Toggling the Night slip off later does not delete the urge. Pure helper in logic.js with tests. Done: one true count in Week after a 1:30am gave-in.
-- [ ] P2 Patterns card on Week, computed over the last 28 days by a pure function in logic.js with tests: top trigger words per slip type (tokenize urge triggers and lapse notes, lowercase, drop stopwords, min 3 letters), urges by time bucket (morning 4-12, afternoon 12-17, evening 17-22, late 22-4), slips by weekday, and a four-week strip (per week: slip days per type, nights checked in, average rating) rendered as small identical blocks, never one combined chart. Under three data points the card shows one calm line: "Patterns appear after a few entries." Done: renders with the seeded 21-day dataset from analysis/ux.md and hides gracefully when empty.
-- [ ] P3 "What would help next time?" optional field after Gave in (urge.help) and under a Night slip note (d.lapseHelp[key]), additive shape. Shown in Journal in italic under the entry. Done: persists and renders.
-- [ ] P4 Urge trigger chips: six chips above the trigger field built from the most used triggers in the last 28 days, falling back to bored, tired, alone, stressed, late, drinking. Tap appends the word. Done: chips render and fill the field.
-- [ ] P5 Move the "last slip" lines out of the week-scoped Slips card into a small "Overall" card at the bottom of Week, one line each for porn and scrolling, same neutral style regardless of number. Done: lines no longer change meaning when paging weeks.
-- [ ] P6 Insight sentences: pure insights(state, weekStart, todayKey) in logic.js returns up to one sentence for the Slips card and one for How I showed up, neutral wording, no exclamation points, comparisons only when last week has logged data. Examples: "Fewer scrolling days than last week, 2 against 4." "Best-rated day was Wednesday." "3 of 4 urges ridden out." Done: tests cover each branch; sentences render at the top of their cards.
-- [ ] P7 Morning priming: Day shows one Intentions note under the date (rotate by day-of-year across the non-empty notes), muted, only when at least one note exists. Done: renders and rotates.
-- [ ] P8 Weekly review: state.reviews[weekStartKey] = { worked, inTheWay, next, at } (additive). From Sunday 15:00 local through Tuesday of the following week, Week shows a "Weekly review" card for that week with three labeled fields; once any field is filled it shows collapsed with an Edit link, and the answers appear at the top of that week's Journal. Done: pure eligibility function tested; card renders and persists.
-- [ ] P9 Real completion count: Routines gets "Night check-ins n of m" using nightCardDone; Gym row reads "Gym 4 times" instead of a bare number. Done: renders.
-- [ ] P10 Snapshot restore: More > Restore lists the last seven daily snapshots from IndexedDB with dates; tapping one merges it with mergeInto semantics and toasts the counts. Done: works after seeding snapshots.
-- [ ] P11 First-run framing: the setup card gets a subtitle line, "A private notebook for the habits and mindset you are working on. Nothing leaves this phone." The More tab gets the same line at the bottom. No sensitive words. Done: renders.
-- [ ] P12 Retire Shortcuts timers: remove settings.useShortcutTimers UI, links, and code; normalize ignores the old key. Done: no shortcuts:// anywhere in the app.
-- [ ] P13 Intentions inputs: text-overflow ellipsis on placeholder and value at large text. Done: no clipped mid-word placeholder at 120 percent.
-- [ ] P14 TESTING.md updated for P1 to P13, including a seeded-data scenario for Patterns and insights. Done: doc matches the code.
+Day
+- [ ] D1 Morning checklist replaces the single Stretched toggle: Up on time, 30 push ups, Stretched, Shower and shave (check rows, d.morning). Keep d.stretched in sync. Morning done when all four plus the hangover kit when shown.
+- [ ] D2 Commitments: remove water polo; keep Gym (log when it happens) and Dinner out on its days.
+- [ ] D3 Under the date, show "Today: <focus skill label>" muted when d.mindFocus is set, with the matching intentions note if any.
+
+Mind (new tab between Day and Night)
+- [ ] M1 Tab bar becomes Day, Mind, Night, Week, More with a new outline icon; sw.js SHELL lists every new file from all builders (js/screens/mind.js, css/screens/mind.css, js/logic-day.js, js/logic-mind.js, js/logic-night.js, js/logic-week.js, js/logic-urge.js, js/logic-more.js; missing files are fine to precache-skip, so guard addAll with individual fetches that ignore failures).
+- [ ] M2 Prepare half: pick today's focus among the four skills (d.mindFocus), shows that skill's intentions note and the why text. Segmented Prepare | Reflect at top, default Prepare before 15:00.
+- [ ] M3 Reflect half: the four 1 to 5 ratings (same d.ratings), each with its intentions note under the label, plus a textarea "A moment today where I..." (d.mindMoment).
+- [ ] M4 Intentions editing moves here (collapsible "Edit intentions" section, same settings.intentions fields, ellipsis on long placeholders).
+- [ ] M5 Weekly review card in Reflect from Sunday 15:00 through the following Tuesday: three fields (What worked, What got in the way, One thing for next week) saved to state.reviews[weekStartKey]; collapsed with Edit once any field is filled. Pure eligibility function with tests.
+
+Night
+- [ ] N1 Flow shrinks to three steps: Wind-down (timer plus two checks: Washed up, Mouth tape and vaseline, d.night), Slips, One sentence. Update the step functions in logic.js (the only allowed logic.js edit) and tests. Summary gains a Mind row: rating summary if any rating exists, otherwise "Not rated yet" with a link that switches to the Mind tab.
+- [ ] N2 Slips: optional "What would help next time?" field under each slip note (d.lapseHelp). Under the scrolling slip, an optional numeric field "Minutes over, if you know" (d.scrollMinutes).
+
+Week
+- [ ] W1 Patterns card over the last 28 days: top trigger words per slip type (urge triggers plus lapse notes, lowercase, stopwords dropped, 3 letters minimum), urges by time bucket (morning 4-12, afternoon 12-17, evening 17-22, late 22-4), slips by weekday, and a four-week strip of identical small blocks (slip days per type, nights checked in, average rating). Under three data points: "Patterns appear after a few entries."
+- [ ] W2 Overall card at the bottom: "Last porn slip ..." and "Last scrolling slip ..." lines, neutral style always, removed from the week-scoped Slips card.
+- [ ] W3 Insight sentences: up to one per Slips card and How I showed up card, neutral, no exclamation points, comparisons only when last week has logged data.
+- [ ] W4 Routines: Morning done n of m (all four morning checks), Wind-down done, Night check-ins n of m (nightCardDone), Gym "4 times", Dinner out n of m; water polo row removed.
+- [ ] W5 Journal: weekly review answers at the top of that week, mind moments, slip help lines in italics.
+
+Urge
+- [ ] U1 Gave in on porn or scrolling sets that day's lapse flag (day from urgeDayKeyFor) and copies the trigger into the lapse note when empty.
+- [ ] U2 Six trigger chips above the field from the most used triggers in the last 28 days, defaults bored, tired, alone, stressed, late, drinking; tap appends.
+- [ ] U3 After Gave in, a short inline follow-up in the overlay: optional "What would help next time?" (urge.help) with Done and Skip.
+- [ ] U4 Remove the Shortcuts timer link from the overlay.
+
+More
+- [ ] R1 Snapshot restore: list the last seven daily snapshots from IndexedDB (own small reader, same DB and store names) with dates; tapping merges with mergeInto semantics and toasts counts.
+- [ ] R2 Framing line in the setup card subtitle and at the bottom of More: "A private notebook for the habits and mindset you are working on. Nothing leaves this phone."
+- [ ] R3 Remove the Shortcuts timers toggle, help text, and setting UI. Remove the Intentions card (Mind owns it now). Remove the water polo chips row from Schedule.
 
 ## Next
 
