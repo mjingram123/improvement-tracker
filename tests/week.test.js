@@ -232,8 +232,8 @@ test('insights.mindset: a move under 1.0 does not qualify', () => {
 
 // ---------- morningDone ----------
 test('morningDone: true only when d.morning has all four checks', () => {
-  assert.equal(W.morningDone({ morning: { up: true, pushups: true, stretched: true, shower: true } }), true);
-  assert.equal(W.morningDone({ morning: { up: true, pushups: true, stretched: true, shower: false } }), false);
+  assert.equal(W.morningDone({ morning: { up: true, pushups: true, stretched: true, shower: true, supplements: true } }), true);
+  assert.equal(W.morningDone({ morning: { up: true, pushups: true, stretched: true, shower: false, supplements: false } }), false);
   assert.equal(W.morningDone({ stretched: true }), false); // legacy shape, no d.morning
   assert.equal(W.morningDone({}), false);
 });
@@ -243,7 +243,7 @@ test('routines: n of m counts for morning, wind-down, night check-ins, gym, dinn
   const s = makeState();
   const start = '2026-09-14', today = '2026-09-16'; // Mon-Wed, n = 3
   s.settings.dinnerDays = [3]; // Wednesday only, matches weekdayOf('2026-09-16')
-  setDay(s, '2026-09-14', { morning: { up: true, pushups: true, stretched: true, shower: true }, windDown: { done: true, endsAt: null }, gym: true });
+  setDay(s, '2026-09-14', { morning: { up: true, pushups: true, stretched: true, shower: true, supplements: true }, windDown: { done: true, endsAt: null }, gym: true });
   setDay(s, '2026-09-15', { stretched: true }); // legacy-only, should not count as morning done
   setDay(s, '2026-09-16', { note: 'wrote something', dinnerOut: true });
   const r = W.routines(s, start, today);

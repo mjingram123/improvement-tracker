@@ -13,9 +13,10 @@ const MORNING_ITEMS = [
   { key: 'pushups', label: '30 push ups' },
   { key: 'stretched', label: 'Stretched' },
   { key: 'shower', label: 'Shower and shave' },
+  { key: 'supplements', label: 'Supplements', hint: 'creatine, AG1, fish oil' },
 ];
 function isPlainObject(v) { return typeof v === 'object' && v !== null && !Array.isArray(v); }
-function defaultMorning(stretched) { return { up: false, pushups: false, stretched: !!stretched, shower: false }; }
+function defaultMorning(stretched) { return { up: false, pushups: false, stretched: !!stretched, shower: false, supplements: false }; }
 function getMorning(d) {
   const base = defaultMorning(d && d.stretched);
   const m = d && isPlainObject(d.morning) ? d.morning : {};
@@ -56,7 +57,7 @@ function renderDay() {
   const morningDone = morningCardDone(morning, hangoverActive, hangoverKitComplete);
 
   let card = `<section class="card list${morningDone ? ' done' : ''}">`;
-  card += MORNING_ITEMS.map((item) => checkRow({ label: item.label, checked: morning[item.key], action: 'morning-check', arg: item.key })).join('');
+  card += MORNING_ITEMS.map((item) => checkRow({ label: item.label, hint: item.hint, checked: morning[item.key], action: 'morning-check', arg: item.key })).join('');
   if (hangoverShown) {
     card += toggleRow({ label: 'Hungover?', hint: 'Fri, Sat, Sun', checked: d.hungover, action: 'day-bool', arg: 'hungover' });
     if (d.hungover) {

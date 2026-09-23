@@ -213,7 +213,7 @@
   // all four checks true. A legacy day with d.stretched true but no d.morning (the
   // pre-D1 shape) is deliberately NOT counted as done.
   function morningDone(d) {
-    return !!(d.morning && d.morning.up && d.morning.pushups && d.morning.stretched && d.morning.shower);
+    return !!(d.morning && d.morning.up && d.morning.pushups && d.morning.stretched && d.morning.shower && d.morning.supplements);
   }
   function routines(state, start, todayKey) {
     const cur = ITLogic.weekStats(state, start, todayKey);

@@ -330,11 +330,11 @@ test('nightCardDone: a whitespace-only note does not count', () => {
   assert.equal(L.nightCardDone(d), false);
 });
 test('nightCardDone: true when the "washed up" night check is on, with no d.night at all otherwise', () => {
-  const d = L.defaultDay(); d.night = { washed: true, tape: false };
+  const d = L.defaultDay(); d.night = { washed: true, tape: false, magnesium: false };
   assert.equal(L.nightCardDone(d), true);
 });
 test('nightCardDone: true when the "mouth tape" night check is on', () => {
-  const d = L.defaultDay(); d.night = { washed: false, tape: true };
+  const d = L.defaultDay(); d.night = { washed: false, tape: true, magnesium: false };
   assert.equal(L.nightCardDone(d), true);
 });
 test('nightCardDone: false when d.night is absent entirely (additive field, defaults false)', () => {
@@ -344,10 +344,10 @@ test('nightCardDone: false when d.night is absent entirely (additive field, defa
 });
 
 test('nightChecksOf: defaults washed/tape to false when d.night is missing', () => {
-  assert.deepEqual(L.nightChecksOf(L.defaultDay()), { washed: false, tape: false });
+  assert.deepEqual(L.nightChecksOf(L.defaultDay()), { washed: false, tape: false, magnesium: false });
 });
 test('nightChecksOf: reads whatever is present on d.night', () => {
-  assert.deepEqual(L.nightChecksOf({ night: { washed: true } }), { washed: true, tape: false });
+  assert.deepEqual(L.nightChecksOf({ night: { washed: true } }), { washed: true, tape: false, magnesium: false });
 });
 
 test('nightStepDone: step 0 tracks wind-down.done', () => {

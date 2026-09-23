@@ -11,14 +11,14 @@ window.ITLogic<Screen>, node require for tests) and one test file tests/<screen>
 
 | Field | Written by | Read by | Shape |
 |---|---|---|---|
-| morning | Day | Week | { up:false, pushups:false, stretched:false, shower:false } |
+| morning | Day | Week | { up:false, pushups:false, stretched:false, shower:false, supplements:false } |
 | stretched | Day (kept in sync with morning.stretched) | Week | boolean, legacy |
 | hungover, hangover | Day | Week | unchanged |
 | gym, dinnerOut | Day | Week | unchanged. waterPolo stays in data, no longer shown |
 | mindFocus | Mind | Day, Week | one of 'curiosity','story','pauses','present' or '' |
 | ratings | Mind (moved out of Night) | Week, Night summary | unchanged shape |
 | mindMoment | Mind | Week Journal | string |
-| night | Night | Week | { washed:false, tape:false } |
+| night | Night | Week | { washed:false, tape:false, magnesium:false } |
 | windDown | Night | Week | unchanged |
 | lapses, lapseNotes | Night; Urge sets lapses[kind] true on Gave in | Week | unchanged |
 | lapseHelp | Night, Urge | Week Journal | { scroll:'', porn:'', nag:'' } |

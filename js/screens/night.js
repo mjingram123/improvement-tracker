@@ -13,7 +13,7 @@ const { esc, toggleRow, checkRow, ring, doneCircleSvg, mmss, fmtLong } = IT.ui;
 const { LAPSES, RATINGS, nightCardDone, firstIncompleteNightStep } = window.ITLogic;
 
 const NightLogic = window.ITLogicNight || {
-  nightChecks(d) { const n = d && d.night; return { washed: !!(n && n.washed), tape: !!(n && n.tape) }; },
+  nightChecks(d) { const n = d && d.night; return { washed: !!(n && n.washed), tape: !!(n && n.tape), magnesium: !!(n && n.magnesium) }; },
   ratingsSummaryText(d, ratings) {
     const on = ratings.filter((r) => d.ratings[r.key] > 0);
     if (!on.length) return null;
@@ -45,6 +45,7 @@ function nightStepWinddown(d) {
   const checksHtml = `<div class="night-checks">
     ${checkRow({ label: 'Washed up', checked: checks.washed, action: 'night-check', arg: 'washed' })}
     ${checkRow({ label: 'Mouth tape and vaseline', checked: checks.tape, action: 'night-check', arg: 'tape' })}
+    ${checkRow({ label: 'Magnesium', checked: checks.magnesium, action: 'night-check', arg: 'magnesium' })}
   </div>`;
   if (wd.done) {
     return `<div class="card-done-line" style="font-size:1.125rem">${doneCircleSvg(24)}15 minutes, done</div><div class="meta">phone down, wash up, mouth tape</div>${checksHtml}`;
@@ -113,6 +114,7 @@ function windDownSummaryText(d) {
   else if (d.windDown.endsAt) parts.push(`In progress, ${mmss(d.windDown.endsAt - Date.now())} left`);
   if (checks.washed) parts.push('Washed up');
   if (checks.tape) parts.push('Mouth tape and vaseline');
+  if (checks.magnesium) parts.push('Magnesium');
   return parts.length ? parts.join(' · ') : null;
 }
 function mindRow(ratingsText) {
@@ -162,7 +164,7 @@ IT.registerScreen('night', { render: renderNight });
 IT.registerActions({
   'winddown-start': () => { const d = IT.day(); d.windDown.endsAt = Date.now() + IT.WIND_DOWN_MIN * 60000; d.windDown.done = false; IT.touch(); IT.save(); IT.render(); IT.ntfyTimerPing('15m'); },
   'winddown-cancel': () => { const d = IT.day(); d.windDown.endsAt = null; IT.touch(); IT.save(); IT.render(); },
-  'night-check': (arg) => { const d = IT.day(); if (!d.night) d.night = { washed: false, tape: false }; d.night[arg] = !d.night[arg]; IT.touch(); IT.save(); IT.render(); },
+  'night-check': (arg) => { const d = IT.day(); if (!d.night) d.night = { washed: false, tape: false, magnesium: false }; d.night[arg] = !d.night[arg]; IT.touch(); IT.save(); IT.render(); },
   'night-goto': (arg) => { const st = loadNightUi(); st.step = Number(arg); saveNightUi(st); IT.render(); },
   'night-next': () => {
     const d = IT.day();

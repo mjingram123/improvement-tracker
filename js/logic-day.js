@@ -18,6 +18,7 @@
     { key: 'pushups', label: '30 push ups' },
     { key: 'stretched', label: 'Stretched' },
     { key: 'shower', label: 'Shower and shave' },
+    { key: 'supplements', label: 'Supplements', hint: 'creatine, AG1, fish oil' },
   ];
 
   function isPlainObject(v) { return typeof v === 'object' && v !== null && !Array.isArray(v); }
@@ -25,7 +26,7 @@
   // Default morning object. `stretched` seeds from the legacy d.stretched field so
   // a day recorded before D1 shipped still shows its stretched state once read.
   function defaultMorning(stretched) {
-    return { up: false, pushups: false, stretched: !!stretched, shower: false };
+    return { up: false, pushups: false, stretched: !!stretched, shower: false, supplements: false };
   }
 
   // Read d.morning with defaults; pure, does not mutate d.

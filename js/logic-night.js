@@ -13,13 +13,13 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const NIGHT_CHECK_DEFAULT = { washed: false, tape: false };
+  const NIGHT_CHECK_DEFAULT = { washed: false, tape: false, magnesium: false };
   const LAPSE_HELP_DEFAULT = { scroll: '', porn: '', nag: '' };
 
   // d.night = { washed, tape }, read with defaults (N1).
   function nightChecks(d) {
     const n = d && d.night;
-    return { washed: !!(n && n.washed), tape: !!(n && n.tape) };
+    return { washed: !!(n && n.washed), tape: !!(n && n.tape), magnesium: !!(n && n.magnesium) };
   }
   // Short "Rated: curiosity 4 · story 3 ..." summary for the Night summary's Mind
   // row, or null when nothing has been rated yet (caller shows "Not rated yet").

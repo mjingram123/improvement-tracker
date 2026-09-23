@@ -241,14 +241,14 @@
   // for this edit), so every read here defaults it inline.
   function nightChecksOf(d) {
     const n = d && d.night;
-    return { washed: !!(n && n.washed), tape: !!(n && n.tape) };
+    return { washed: !!(n && n.washed), tape: !!(n && n.tape), magnesium: !!(n && n.magnesium) };
   }
   // The existing partial-done rule: the night card counts as finished with any partial
   // input. Ratings still count here even though the Night flow no longer renders them,
   // so an evening that was only rated from the Mind tab still reads as a done night.
   function nightCardDone(d) {
     const checks = nightChecksOf(d);
-    return !!(d.windDown.done || checks.washed || checks.tape ||
+    return !!(d.windDown.done || checks.washed || checks.tape || checks.magnesium ||
       RATINGS.some((r) => d.ratings[r.key] > 0) || (d.note && d.note.trim().length > 0));
   }
   // Step completeness for the 3-step flow. Step 1 (Slips) has no data-only signal:

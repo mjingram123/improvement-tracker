@@ -6,13 +6,13 @@ const N = require('../js/logic-night.js');
 
 // ---------- nightChecks (N1) ----------
 test('nightChecks: defaults washed/tape to false with no d.night at all', () => {
-  assert.deepEqual(N.nightChecks({}), { washed: false, tape: false });
+  assert.deepEqual(N.nightChecks({}), { washed: false, tape: false, magnesium: false });
 });
 test('nightChecks: reads washed/tape when present', () => {
-  assert.deepEqual(N.nightChecks({ night: { washed: true, tape: false } }), { washed: true, tape: false });
+  assert.deepEqual(N.nightChecks({ night: { washed: true, tape: false, magnesium: false } }), { washed: true, tape: false, magnesium: false });
 });
 test('nightChecks: a partial d.night object still defaults the missing key', () => {
-  assert.deepEqual(N.nightChecks({ night: { tape: true } }), { washed: false, tape: true });
+  assert.deepEqual(N.nightChecks({ night: { tape: true, magnesium: false } }), { washed: false, tape: true, magnesium: false });
 });
 
 // ---------- ratingsSummaryText ----------
