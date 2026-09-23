@@ -10,7 +10,7 @@
 'use strict';
 const IT = window.IT;
 const { esc, toggleRow, checkRow, ring, doneCircleSvg, mmss, fmtLong } = IT.ui;
-const { LAPSES, RATINGS, nightCardDone, firstIncompleteNightStep, shortcutsUiVisible } = window.ITLogic;
+const { LAPSES, RATINGS, nightCardDone, firstIncompleteNightStep } = window.ITLogic;
 
 const NightLogic = window.ITLogicNight || {
   nightChecks(d) { const n = d && d.night; return { washed: !!(n && n.washed), tape: !!(n && n.tape) }; },
@@ -55,7 +55,7 @@ function nightStepWinddown(d) {
       <button class="btn" type="button" data-action="winddown-cancel">Cancel</button>
       <div class="meta">phone down, wash up, mouth tape</div>${checksHtml}`;
   }
-  const scLink = shortcutsUiVisible(IT.state.settings) && IT.state.settings.useShortcutTimers ? '<a class="btn" href="shortcuts://run-shortcut?name=Wind%20Down">Start iPhone timer</a>' : '';
+  const scLink = '';
   return `<button class="btn primary big block" style="min-height:64px" type="button" data-action="winddown-start">Start 15:00</button>${scLink}
     <div class="meta">phone down, wash up, mouth tape</div>${checksHtml}`;
 }
