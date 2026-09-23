@@ -24,6 +24,7 @@
 .entry .d { font-size: 0.75rem; color: var(--muted); font-weight: 500; letter-spacing: .03em; }
 .entry .q { color: var(--text); font-size: 0.9375rem; line-height: 1.4; }
 .entry .note { font-size: 0.8125rem; color: var(--muted); font-style: italic; }
+.meta.insight { margin-top: 4px; }
 
 /* Patterns card (W1) - every mark below uses --blue as the single data hue. */
 .kicker-caps:not(:first-child) { margin-top: 2px; }

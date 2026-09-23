@@ -73,6 +73,8 @@ function renderPatternsCard(today) {
   </div></section>`;
 }
 
+function insightLine(text) { return text ? `<p class="meta insight">${esc(text)}</p>` : ''; }
+
 // ---------- W2: Overall card ----------
 function renderOverallCard(today) {
   if (!WL) return '';
@@ -114,12 +116,14 @@ function renderWeek(ctx) {
 
   if (cur.n === 0) return `<div class="screen-14">${nav}${whyLine}${banner}${patternsCard}<section class="card"><p class="muted">Nothing logged yet for this week.</p></section>${overallCard}</div>`;
 
-  let slips = `<section class="card"><h2>Slips</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">`;
+  const insights = WL ? WL.insights(IT.state, start, today) : { slips: null, mindset: null };
+
+  let slips = `<section class="card"><h2>Slips</h2>${insightLine(insights.slips)}<div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">`;
   for (const l of LAPSES) slips += rate(l.label, cur.lapses[l.key], cur.n, { prev: prev.logged ? prev.lapses[l.key] : null, prevN: prev.logged ? prev.n : null });
   slips += `<div class="card-divider"></div>
     <div style="font-size:0.9375rem">Urges ridden out: <span style="font-weight:600;color:var(--green-700)">${cur.rode} rode · ${cur.gave} gave in</span></div></div></section>`;
 
-  let showed = `<section class="card"><h2>How I showed up</h2><div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${spark(cur.dayAvg)}
+  let showed = `<section class="card"><h2>How I showed up</h2>${insightLine(insights.mindset)}<div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${spark(cur.dayAvg)}
     <div class="spark-days">${allWeekKeys(start).map((k, i) => `<div><b>${cur.dayAvg[i] == null ? '·' : cur.dayAvg[i].toFixed(1)}</b><span>${DAY_NAMES[weekdayOf(k)]}</span></div>`).join('')}</div>
     <div class="card-divider"></div>`;
   for (const r of RATINGS) {

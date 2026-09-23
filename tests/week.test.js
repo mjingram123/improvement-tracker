@@ -153,3 +153,79 @@ test('overallLines: today, one day ago, and several days ago phrasing', () => {
   lines = W.overallLines(s, '2026-09-22');
   assert.equal(lines.scroll, 'Last scrolling slip logged 7 days ago.');
 });
+
+// ---------- insights: slips ----------
+test('insights.slips: fewer scrolling days than last week, both numbers shown', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-20'; // full week
+  for (const k of L.allWeekKeys(start)) setDay(s, k, {});
+  s.days['2026-09-14'].lapses.scroll = true; // 1 this week
+  for (const k of L.allWeekKeys('2026-09-07')) setDay(s, k, {});
+  s.days['2026-09-07'].lapses.scroll = true;
+  s.days['2026-09-08'].lapses.scroll = true;
+  s.days['2026-09-09'].lapses.scroll = true; // 3 last week
+  const r = W.insights(s, start, today);
+  assert.equal(r.slips, 'Fewer scrolling slip days than last week (1 vs 3).');
+});
+test('insights.slips: more porn days than last week when scroll is unchanged', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-20';
+  for (const k of L.allWeekKeys(start)) setDay(s, k, {});
+  s.days['2026-09-14'].lapses.porn = true;
+  s.days['2026-09-15'].lapses.porn = true;
+  for (const k of L.allWeekKeys('2026-09-07')) setDay(s, k, {});
+  const r = W.insights(s, start, today);
+  assert.equal(r.slips, 'More porn slip days than last week (2 vs 0).');
+});
+test('insights.slips: no comparison when last week has no logged days, falls back to urges ridden out', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-20';
+  setDay(s, '2026-09-14', {});
+  s.urges = [
+    urge('2026-09-14T10:00:00', 'scroll', '', 'rode'),
+    urge('2026-09-15T10:00:00', 'scroll', '', 'rode'),
+    urge('2026-09-16T10:00:00', 'scroll', '', 'gave'),
+  ];
+  const r = W.insights(s, start, today);
+  assert.equal(r.slips, '2 of 3 urges ridden out.');
+});
+test('insights.slips: null when nothing to say', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-20';
+  setDay(s, '2026-09-14', {});
+  const r = W.insights(s, start, today);
+  assert.equal(r.slips, null);
+});
+
+// ---------- insights: mindset ----------
+test('insights.mindset: best-rated day wins over a dimension move', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-20';
+  setDay(s, '2026-09-14', { ratings: { curiosity: 5, story: 5, pauses: 5, present: 5 } }); // Monday
+  setDay(s, '2026-09-16', { ratings: { curiosity: 2, story: 2, pauses: 2, present: 2 } }); // Wednesday
+  const r = W.insights(s, start, today);
+  assert.equal(r.mindset, 'Best-rated day was Monday.');
+});
+test('insights.mindset: dimension moved by >= 1.0 versus last week when only one day is rated this week', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-20';
+  setDay(s, '2026-09-07', { ratings: { curiosity: 4, story: 0, pauses: 0, present: 0 } });
+  setDay(s, '2026-09-14', { ratings: { curiosity: 2.5, story: 0, pauses: 0, present: 0 } });
+  const r = W.insights(s, start, today);
+  assert.equal(r.mindset, 'Curious in conversation moved from 4.0 to 2.5 versus last week.');
+});
+test('insights.mindset: null when no ratings and no qualifying move', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-20';
+  setDay(s, '2026-09-14', {});
+  const r = W.insights(s, start, today);
+  assert.equal(r.mindset, null);
+});
+test('insights.mindset: a move under 1.0 does not qualify', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-20';
+  setDay(s, '2026-09-14', { ratings: { curiosity: 3, story: 0, pauses: 0, present: 0 } });
+  setDay(s, '2026-09-07', { ratings: { curiosity: 3.5, story: 0, pauses: 0, present: 0 } });
+  const r = W.insights(s, start, today);
+  assert.equal(r.mindset, null);
+});

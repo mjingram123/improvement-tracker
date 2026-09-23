@@ -163,10 +163,56 @@
     };
   }
 
+  // ---------- W3: insight sentences ----------
+  const SLIP_LABELS = { scroll: 'scrolling', porn: 'porn' };
+  function slipsInsight(cur, prev) {
+    if (prev.logged) {
+      for (const kind of ['scroll', 'porn']) {
+        const curN = cur.lapses[kind], prevN = prev.lapses[kind];
+        if (curN !== prevN) {
+          const cmp = curN < prevN ? 'Fewer' : 'More';
+          return `${cmp} ${SLIP_LABELS[kind]} slip days than last week (${curN} vs ${prevN}).`;
+        }
+      }
+    }
+    const total = cur.rode + cur.gave;
+    if (total > 0) return `${cur.rode} of ${total} urges ridden out.`;
+    return null;
+  }
+  const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  // Only worth naming a "best" day once there are at least two rated days to pick
+  // among - with a single rated day it is trivially "best" and tells nothing.
+  function bestRatedDayInsight(cur, start) {
+    const rated = cur.dayAvg.filter((v) => v != null).length;
+    if (rated < 2) return null;
+    let best = -1, bestVal = null;
+    cur.dayAvg.forEach((v, i) => { if (v != null && (bestVal == null || v > bestVal)) { bestVal = v; best = i; } });
+    return `Best-rated day was ${FULL_DAY_NAMES[weekdayOf(addDays(start, best))]}.`;
+  }
+  function mindsetInsight(cur, prev, start) {
+    const best = bestRatedDayInsight(cur, start);
+    if (best) return best;
+    if (prev.logged) {
+      for (const r of RATINGS) {
+        const curV = cur.ratingAvg[r.key], prevV = prev.ratingAvg[r.key];
+        if (curV != null && prevV != null && Math.abs(curV - prevV) >= 1) {
+          return `${r.label} moved from ${prevV.toFixed(1)} to ${curV.toFixed(1)} versus last week.`;
+        }
+      }
+    }
+    return null;
+  }
+  function insights(state, weekStartKey, todayKey) {
+    const cur = ITLogic.weekStats(state, weekStartKey, todayKey);
+    const prev = ITLogic.weekStats(state, addDays(weekStartKey, -7), todayKey);
+    return { slips: slipsInsight(cur, prev), mindset: mindsetInsight(cur, prev, weekStartKey) };
+  }
+
   return {
     STOPWORDS, wordsFromText, topWords,
     windowKeys, windowUrges,
     triggerWords, urgeTimeBuckets, timeBucketFor, weekdaySlips, fourWeekStrip, weekBlock, patterns,
     overallLines, daysAgoText,
+    insights, slipsInsight, mindsetInsight, bestRatedDayInsight,
   };
 });
