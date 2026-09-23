@@ -86,29 +86,35 @@
       nightVisited: [false, false, false, false],
     };
   }
+  // True only for a plain data object - excludes null, arrays, and scalars, all of
+  // which spread by index/charcode into an object and silently corrupt state
+  // (e.g. normalize({ days: { k: { hangover: 'oops' } } }) used to yield
+  // hangover: {0:'o',1:'o',2:'p',3:'s'}). Every nested spread below guards with this.
+  function isPlainObject(v) { return typeof v === 'object' && v !== null && !Array.isArray(v); }
   function normalize(s) {
     const d = defaultState();
-    if (!s || typeof s !== 'object') return d;
+    if (!isPlainObject(s)) return d;
     const out = { ...d, ...s };
-    out.settings = { ...d.settings, ...(s.settings || {}) };
-    out.settings.onboarding = { ...d.settings.onboarding, ...((s.settings && s.settings.onboarding) || {}) };
-    const incIntentions = (s.settings && s.settings.intentions) || {};
+    const sSettings = isPlainObject(s.settings) ? s.settings : {};
+    out.settings = { ...d.settings, ...sSettings };
+    out.settings.onboarding = { ...d.settings.onboarding, ...(isPlainObject(sSettings.onboarding) ? sSettings.onboarding : {}) };
+    const incIntentions = isPlainObject(sSettings.intentions) ? sSettings.intentions : {};
     out.settings.intentions = {
       ...d.settings.intentions, ...incIntentions,
-      notes: { ...d.settings.intentions.notes, ...(incIntentions.notes || {}) },
+      notes: { ...d.settings.intentions.notes, ...(isPlainObject(incIntentions.notes) ? incIntentions.notes : {}) },
     };
-    out.meta = { ...d.meta, ...(s.meta || {}) };
+    out.meta = { ...d.meta, ...(isPlainObject(s.meta) ? s.meta : {}) };
     out.days = {};
     for (const [k, v] of Object.entries(s.days || {})) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !v || typeof v !== 'object') continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !isPlainObject(v)) continue;
       const dd = defaultDay();
       out.days[k] = {
         ...dd, ...v,
-        hangover: { ...dd.hangover, ...(v.hangover || {}) },
-        lapses: { ...dd.lapses, ...(v.lapses || {}) },
-        lapseNotes: { ...dd.lapseNotes, ...(v.lapseNotes || {}) },
-        ratings: { ...dd.ratings, ...(v.ratings || {}) },
-        windDown: { ...dd.windDown, ...(v.windDown || {}) },
+        hangover: { ...dd.hangover, ...(isPlainObject(v.hangover) ? v.hangover : {}) },
+        lapses: { ...dd.lapses, ...(isPlainObject(v.lapses) ? v.lapses : {}) },
+        lapseNotes: { ...dd.lapseNotes, ...(isPlainObject(v.lapseNotes) ? v.lapseNotes : {}) },
+        ratings: { ...dd.ratings, ...(isPlainObject(v.ratings) ? v.ratings : {}) },
+        windDown: { ...dd.windDown, ...(isPlainObject(v.windDown) ? v.windDown : {}) },
         nightVisited: Array.isArray(v.nightVisited) ? Array.from({ length: 4 }, (_, i) => !!v.nightVisited[i]) : dd.nightVisited.slice(),
       };
     }

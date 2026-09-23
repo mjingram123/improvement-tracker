@@ -96,6 +96,38 @@ test('normalize: partial day objects get missing fields filled in', () => {
   assert.deepEqual(d.hangover, { lmnt: false, food: false, ibuprofen: false, walk: false });
   assert.deepEqual(d.lapses, { scroll: false, porn: false, nag: false });
 });
+test('normalize: a wrong-typed (string) nested day field falls back to defaults instead of index-spreading (exact repro from analysis)', () => {
+  const out = L.normalize({ days: { '2026-09-07': { hangover: 'oops' } } });
+  const d = out.days['2026-09-07'];
+  assert.deepEqual(d.hangover, { lmnt: false, food: false, ibuprofen: false, walk: false });
+});
+test('normalize: a wrong-typed (array) nested day field falls back to defaults', () => {
+  const out = L.normalize({ days: { '2026-09-07': { lapses: ['a', 'b'], ratings: [1, 2, 3], windDown: [] } } });
+  const d = out.days['2026-09-07'];
+  assert.deepEqual(d.lapses, { scroll: false, porn: false, nag: false });
+  assert.deepEqual(d.ratings, { curiosity: 0, story: 0, pauses: 0, present: 0 });
+  assert.deepEqual(d.windDown, { endsAt: null, done: false });
+});
+test('normalize: a wrong-typed (null/number) nested day field falls back to defaults', () => {
+  const out = L.normalize({ days: { '2026-09-07': { hangover: null, lapseNotes: 42 } } });
+  const d = out.days['2026-09-07'];
+  assert.deepEqual(d.hangover, { lmnt: false, food: false, ibuprofen: false, walk: false });
+  assert.deepEqual(d.lapseNotes, { scroll: '', porn: '', nag: '' });
+});
+test('normalize: a day value that is itself an array is dropped like any other bad day', () => {
+  const out = L.normalize({ days: { '2026-09-07': ['not', 'a', 'day'] } });
+  assert.deepEqual(Object.keys(out.days), []);
+});
+test('normalize: wrong-typed settings.onboarding/intentions fall back to defaults', () => {
+  const out = L.normalize({ settings: { onboarding: 'oops', intentions: ['a'] } });
+  assert.deepEqual(out.settings.onboarding, { home: false, shortcuts: false, backup: false });
+  assert.deepEqual(out.settings.intentions, { why: '', notes: { curiosity: '', story: '', pauses: '', present: '' } });
+});
+test('normalize: an array as the whole input returns a valid default state (not just an empty array)', () => {
+  const out = L.normalize(['oops', 'array']);
+  assert.deepEqual(out.days, {});
+  assert.equal(out.version, 1);
+});
 test('normalize: bad day keys are dropped', () => {
   const out = L.normalize({ days: { 'not-a-date': { stretched: true }, '2026/09/07': {}, '2026-9-7': {}, '2026-09-07': { stretched: true } } });
   assert.deepEqual(Object.keys(out.days), ['2026-09-07']);
