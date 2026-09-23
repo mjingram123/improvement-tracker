@@ -1,14 +1,33 @@
 /* Improvement Tracker - the urge overlay (dialog content) and its floating
    launcher button label (core owns the button's live countdown text via
-   updateUrgeButton; this file owns the overlay markup and its actions). */
+   updateUrgeButton; this file owns the overlay markup and its actions).
+
+   applyGaveIn is kept inline here (mirrored in js/logic-urge.js, which
+   carries its tests) so this file works standalone even before
+   js/logic-urge.js is wired into index.html. */
 (() => {
 'use strict';
 const IT = window.IT;
 const { esc, ring, mmss, fmtTime } = IT.ui;
-const { recentUrges, weekStart, weekStats: weekStatsPure } = window.ITLogic;
+const { recentUrges, weekStart, weekStats: weekStatsPure, urgeDayKeyFor, defaultDay } = window.ITLogic;
 
 const closeSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// Mirrored in js/logic-urge.js (tested there). Sets lapses[urge.kind] on the
+// day the urge itself falls on (urgeDayKeyFor + settings.rolloverHour),
+// creating that day if needed, and copies the trigger into that lapse's note
+// only when the note is currently empty. Mutates `state`; returns the day key.
+function applyGaveIn(state, urge) {
+  const key = urgeDayKeyFor(urge.at, state.settings.rolloverHour);
+  if (!state.days[key]) state.days[key] = defaultDay();
+  const d = state.days[key];
+  const kind = urge.kind;
+  d.lapses[kind] = true;
+  const hasNote = d.lapseNotes[kind] && d.lapseNotes[kind].trim();
+  if (!hasNote) d.lapseNotes[kind] = urge.trigger || '';
+  return key;
+}
 
 let urgeKind = 'scroll';
 function pendingUrge() { return IT.state.urges.find((u) => !u.outcome) || null; }
@@ -82,6 +101,10 @@ IT.registerActions({
     const u = IT.state.urges.find((x) => x.id === id);
     if (u) {
       u.outcome = outcome; u.resolvedAt = new Date().toISOString(); IT.state.meta.updatedAt = Date.now();
+      if (outcome === 'gave') {
+        const dayKey = applyGaveIn(IT.state, u);
+        IT.touch(dayKey);
+      }
       IT.save();
       IT.toast(outcome === 'rode' ? 'Rode it out. Logged.' : 'Logged.');
       IT.closeUrgeOverlay();
