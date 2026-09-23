@@ -720,7 +720,6 @@ document.addEventListener('click', (e) => {
     case 'rate': { const [k, n] = arg.split(':'); d.ratings[k] = d.ratings[k] === Number(n) ? 0 : Number(n); touch(); save(); render(); break; }
     case 'winddown-start': d.windDown.endsAt = Date.now() + WIND_DOWN_MIN * 60000; d.windDown.done = false; touch(); save(); render(); ntfyTimerPing('15m'); break;
     case 'winddown-cancel': d.windDown.endsAt = null; touch(); save(); render(); break;
-    case 'winddown-reset': d.windDown.done = false; touch(); save(); render(); break;
     case 'night-goto': { const st = loadNightUi(); st.step = Number(arg); saveNightUi(st); render(); break; }
     case 'night-next':
     case 'night-skip': {
@@ -729,7 +728,6 @@ document.addEventListener('click', (e) => {
       if (st.step < 3) st.step += 1; else st.forceFlow = false;
       saveNightUi(st); render(); break;
     }
-    case 'night-back': { const st = loadNightUi(); if (st.step > 0) st.step -= 1; saveNightUi(st); render(); break; }
     case 'night-edit': { const st = loadNightUi(); st.step = Number(arg); st.forceFlow = true; saveNightUi(st); render(); break; }
     case 'night-summary': { const st = loadNightUi(); st.forceFlow = false; saveNightUi(st); render(); break; }
     case 'urge-open': openUrgeOverlay(); break;
