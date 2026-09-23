@@ -565,6 +565,7 @@ function renderMore() {
     <p class="muted small" style="margin-top:10px">This app never sends notifications on its own. Two daily nudges come from a scheduled ntfy push, not the app; wind-down and urge timers can also ping your phone directly, even locked.</p>
     <div class="field-group" style="margin-top:12px"><span class="field-label">ntfy topic</span>
       <input class="field" type="text" id="ntfy-topic" data-action="ntfy-topic" value="${esc(s.ntfyTopic)}" placeholder="improve-yourname-1234"></div>
+    <p class="muted small" style="margin-top:6px">Anyone who guesses the topic can read it, so keep it long and random.</p>
     <div class="btn-row" style="margin-top:10px"><button class="btn" type="button" data-action="ntfy-test" ${s.ntfyTopic ? '' : 'disabled'}>Send test</button></div>
     ${toggleRow({ label: 'Timer pings', hint: 'Pings 15 or 10 minutes after a timer starts. Cancelling the timer cannot recall the ping.', checked: s.ntfyTimers, action: 'settings-bool', arg: 'ntfyTimers' })}
     ${scVisible ? `<div style="margin-top:6px">${toggleRow({ label: 'Shortcut timers', hint: 'If you make Shortcuts named Wind Down and Ride It Out that start a 15 and 10 minute timer, the app can launch them.', checked: s.useShortcutTimers, action: 'settings-bool', arg: 'useShortcutTimers' })}</div>` : ''}
