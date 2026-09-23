@@ -5,14 +5,16 @@ const IT = window.IT;
 const { esc, bannerSvg } = IT.ui;
 const {
   LAPSES, RATINGS, DAY_NAMES,
-  weekStats: weekStatsPure, lastLapse: lastLapsePure, weekStart, addDays, weekdayOf,
-  allWeekKeys, fmtShort, fmtLong, dateOf, backupDueDays,
+  weekStats: weekStatsPure, weekStart, addDays, weekdayOf,
+  allWeekKeys, fmtShort, fmtLong, backupDueDays, nightCardDone,
 } = window.ITLogic;
+// Until the Mind builder wires the <script> tag for logic-week.js into index.html,
+// this can be undefined - every use below is gated so the screen still renders.
+const WL = window.ITLogicWeek;
 
 let weekCursor = null; // week start key being viewed
 
 function weekStats(start) { return weekStatsPure(IT.state, start, IT.todayKey()); }
-function lastLapse(kind) { return lastLapsePure(IT.state, kind); }
 function backupDue() { return backupDueDays(IT.state, Date.now()); }
 
 const chevronSvg = (dir) => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${dir === 'l' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'}"/></svg>`;
@@ -27,6 +29,61 @@ function spark(vals) {
   const dots = pts.filter(Boolean).map((p) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4.5" fill="var(--green)"/>`).join('');
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${paths}${dots}</svg>`;
 }
+
+// ---------- small multiples helper (single hue: --blue for every mark) ----------
+function miniBars(items) {
+  const max = Math.max(1, ...items.map((i) => i.n));
+  return `<div class="mini-bars">${items.map((i) => `<div class="mini-bar-col"><div class="mini-bar-track"><div class="mini-bar-fill" style="height:${Math.max(6, Math.round((i.n / max) * 100))}%"></div></div><span class="mini-n">${i.n}</span><span class="mini-label">${esc(i.label)}</span></div>`).join('')}</div>`;
+}
+
+// ---------- W1: Patterns card ----------
+function renderPatternsCard(today) {
+  if (!WL) return '';
+  const p = WL.patterns(IT.state, today);
+  if (!p.ready) return `<section class="card"><h2>Patterns</h2><p class="muted small" style="margin-top:10px">${esc(p.message)}</p></section>`;
+
+  const wordSection = LAPSES.map((l) => {
+    const words = p.triggerWords[l.key];
+    if (!words.length) return '';
+    const tags = words.map((w) => `${esc(w.word)} <b>${w.count}</b>`).join(' · ');
+    return `<div class="pattern-row"><span class="pattern-label">${esc(l.label)}</span><span class="pattern-value">${tags}</span></div>`;
+  }).join('');
+  const wordsBlock = wordSection ? `<div class="kicker-caps">Top triggers</div><div class="pattern-list">${wordSection}</div>` : '';
+
+  const buckets = ['morning', 'afternoon', 'evening', 'late'];
+  const bucketLabels = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening', late: 'Late' };
+  const bucketItems = buckets.map((b) => ({ label: bucketLabels[b], n: p.timeBuckets[b] }));
+  const bucketsBlock = `<div class="kicker-caps">Urges by time of day</div>${miniBars(bucketItems)}`;
+
+  const weekdayBlock = `<div class="kicker-caps">Slips by weekday</div>` + LAPSES.map((l) => {
+    const items = DAY_NAMES.map((name, i) => ({ label: name, n: p.weekdaySlips[l.key][i] }));
+    return `<div class="wd-row"><span class="wd-row-label">${esc(l.label)}</span>${miniBars(items)}</div>`;
+  }).join('');
+
+  const stripBlock = `<div class="kicker-caps">Last 4 weeks</div><div class="strip-grid">${p.fourWeekStrip.map((w) => `
+    <div class="strip-block">
+      <div class="strip-range">${esc(fmtShort(w.start))}</div>
+      ${LAPSES.map((l) => `<div class="strip-stat">${esc(l.label)} ${w.lapses[l.key]}</div>`).join('')}
+      <div class="strip-stat">Nights ${w.nights}</div>
+      <div class="strip-stat">Avg ${w.avgRating == null ? '–' : w.avgRating.toFixed(1)}</div>
+    </div>`).join('')}</div>`;
+
+  return `<section class="card"><h2>Patterns</h2><div style="display:flex;flex-direction:column;gap:16px;margin-top:14px">
+    ${wordsBlock}${bucketsBlock}${weekdayBlock}${stripBlock}
+  </div></section>`;
+}
+
+function insightLine(text) { return text ? `<p class="meta insight">${esc(text)}</p>` : ''; }
+
+// ---------- W2: Overall card ----------
+function renderOverallCard(today) {
+  if (!WL) return '';
+  const lines = WL.overallLines(IT.state, today);
+  return `<section class="card"><h2>Overall</h2><div style="display:flex;flex-direction:column;gap:4px;margin-top:10px">
+    <p class="muted small">${esc(lines.porn)}</p><p class="muted small">${esc(lines.scroll)}</p>
+  </div></section>`;
+}
+
 function renderWeek(ctx) {
   const today = IT.todayKey();
   if (!weekCursor || (ctx && ctx.entering)) weekCursor = weekStart(today);
@@ -51,17 +108,22 @@ function renderWeek(ctx) {
   const needBackup = backupDue();
   const banner = needBackup ? `<div class="banner">${bannerSvg}No backup in ${needBackup} days. Make one in More, it takes ten seconds.</div>` : '';
 
-  if (cur.n === 0) return `<div class="screen-14">${nav}${whyLine}${banner}<section class="card"><p class="muted">Nothing logged yet for this week.</p></section></div>`;
+  // Patterns and Overall are both relative to today (like the old porn line was),
+  // not to the navigated week, so they render the same regardless of which week
+  // is on screen.
+  const patternsCard = renderPatternsCard(today);
+  const overallCard = renderOverallCard(today);
 
-  let slips = `<section class="card"><h2>Slips</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">`;
+  if (cur.n === 0) return `<div class="screen-14">${nav}${whyLine}${banner}${patternsCard}<section class="card"><p class="muted">Nothing logged yet for this week.</p></section>${overallCard}</div>`;
+
+  const insights = WL ? WL.insights(IT.state, start, today) : { slips: null, mindset: null };
+
+  let slips = `<section class="card"><h2>Slips</h2>${insightLine(insights.slips)}<div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">`;
   for (const l of LAPSES) slips += rate(l.label, cur.lapses[l.key], cur.n, { prev: prev.logged ? prev.lapses[l.key] : null, prevN: prev.logged ? prev.n : null });
   slips += `<div class="card-divider"></div>
-    <div style="font-size:0.9375rem">Urges ridden out: <span style="font-weight:600;color:var(--green-700)">${cur.rode} rode · ${cur.gave} gave in</span></div>`;
-  const lp = lastLapse('porn');
-  const since = lp ? Math.round((dateOf(today) - dateOf(lp)) / 86400000) : null;
-  slips += `<p class="muted small">${lp ? `Last porn slip logged ${since === 0 ? 'today' : since + (since === 1 ? ' day ago' : ' days ago')}.` : 'No porn slips logged yet.'}</p></div></section>`;
+    <div style="font-size:0.9375rem">Urges ridden out: <span style="font-weight:600;color:var(--green-700)">${cur.rode} rode · ${cur.gave} gave in</span></div></div></section>`;
 
-  let showed = `<section class="card"><h2>How I showed up</h2><div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${spark(cur.dayAvg)}
+  let showed = `<section class="card"><h2>How I showed up</h2>${insightLine(insights.mindset)}<div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${spark(cur.dayAvg)}
     <div class="spark-days">${allWeekKeys(start).map((k, i) => `<div><b>${cur.dayAvg[i] == null ? '·' : cur.dayAvg[i].toFixed(1)}</b><span>${DAY_NAMES[weekdayOf(k)]}</span></div>`).join('')}</div>
     <div class="card-divider"></div>`;
   for (const r of RATINGS) {
@@ -70,23 +132,41 @@ function renderWeek(ctx) {
   }
   showed += `</div></section>`;
 
+  const nightCheckins = cur.keys.filter((k) => IT.state.days[k] && nightCardDone(IT.state.days[k])).length;
   let routines = `<section class="card"><h2>Routines</h2><div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">`;
-  routines += rate('Stretched', cur.stretched, cur.n, { prev: prev.logged ? prev.stretched : null, prevN: prev.logged ? prev.n : null });
+  if (WL) {
+    const r = WL.routines(IT.state, start, today);
+    routines += rate('Morning done', r.morning.n, r.morning.m);
+  }
   routines += rate('Wind-down done', cur.windDown, cur.n, { prev: prev.logged ? prev.windDown : null, prevN: prev.logged ? prev.n : null });
-  routines += rate('Gym', cur.gym, null, { prev: prev.logged ? prev.gym : null });
-  if (cur.waterPoloPossible) routines += rate('Water polo', cur.waterPolo, cur.waterPoloPossible);
+  routines += rate('Night check-ins', nightCheckins, cur.n);
+  routines += `<div class="stat"><div class="line"><span>Gym</span><span class="val">${cur.gym} times</span></div></div>`;
   if (cur.dinnerPossible) routines += rate('Dinner out', cur.dinner, cur.dinnerPossible);
   routines += `</div></section>`;
 
-  const entries = cur.keys.slice().reverse().map((k) => {
-    const d = IT.state.days[k]; if (!d) return '';
-    const notes = LAPSES.filter((l) => d.lapses[l.key] && d.lapseNotes[l.key]).map((l) => `<div class="note">before ${l.key === 'scroll' ? 'scrolling' : l.key === 'nag' ? 'nagging' : 'porn'}: ${esc(d.lapseNotes[l.key])}</div>`).join('');
-    if (!d.note && !notes) return '';
-    return `<div class="entry"><div class="d">${esc(fmtLong(k))}</div>${d.note ? `<div class="q">${esc(d.note)}</div>` : ''}${notes}</div>`;
-  }).join('');
-  const journal = `<section class="card"><h2>Journal</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">${entries || '<p class="muted small">Nothing written yet.</p>'}</div></section>`;
+  const weeklyReview = WL ? WL.weeklyReview(IT.state, start) : null;
+  const reviewBlock = weeklyReview ? `<div class="entry"><div class="kicker-caps">Weekly review</div>
+    ${weeklyReview.worked ? `<div class="q">${esc(weeklyReview.worked)}</div>` : ''}
+    ${weeklyReview.inTheWay ? `<div class="q">${esc(weeklyReview.inTheWay)}</div>` : ''}
+    ${weeklyReview.next ? `<div class="q">${esc(weeklyReview.next)}</div>` : ''}</div>` : '';
 
-  return `<div class="screen-14">${nav}${whyLine}${banner}${slips}${showed}${routines}${journal}</div>`;
+  let entries;
+  if (WL) {
+    entries = WL.journalEntries(IT.state, start, today).map((e) => {
+      const lapseLines = e.lapses.map((l) => `<div class="note">before ${l.key === 'scroll' ? 'scrolling' : l.key === 'nag' ? 'nagging' : 'porn'}: ${esc(l.note)}</div>${l.help ? `<div class="note help">next time: ${esc(l.help)}</div>` : ''}`).join('');
+      return `<div class="entry"><div class="d">${esc(fmtLong(e.key))}</div>${e.note ? `<div class="q">${esc(e.note)}</div>` : ''}${e.mindMoment ? `<div class="note">moment: ${esc(e.mindMoment)}</div>` : ''}${lapseLines}</div>`;
+    }).join('');
+  } else {
+    entries = cur.keys.slice().reverse().map((k) => {
+      const d = IT.state.days[k]; if (!d) return '';
+      const notes = LAPSES.filter((l) => d.lapses[l.key] && d.lapseNotes[l.key]).map((l) => `<div class="note">before ${l.key === 'scroll' ? 'scrolling' : l.key === 'nag' ? 'nagging' : 'porn'}: ${esc(d.lapseNotes[l.key])}</div>`).join('');
+      if (!d.note && !notes) return '';
+      return `<div class="entry"><div class="d">${esc(fmtLong(k))}</div>${d.note ? `<div class="q">${esc(d.note)}</div>` : ''}${notes}</div>`;
+    }).join('');
+  }
+  const journal = `<section class="card"><h2>Journal</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">${reviewBlock}${entries || (reviewBlock ? '' : '<p class="muted small">Nothing written yet.</p>')}</div></section>`;
+
+  return `<div class="screen-14">${nav}${whyLine}${banner}${patternsCard}${slips}${showed}${routines}${journal}${overallCard}</div>`;
 }
 
 IT.registerScreen('week', { render: renderWeek });
