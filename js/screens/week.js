@@ -6,7 +6,7 @@ const { esc, bannerSvg } = IT.ui;
 const {
   LAPSES, RATINGS, DAY_NAMES,
   weekStats: weekStatsPure, weekStart, addDays, weekdayOf,
-  allWeekKeys, fmtShort, fmtLong, backupDueDays,
+  allWeekKeys, fmtShort, fmtLong, backupDueDays, nightCardDone,
 } = window.ITLogic;
 // Until the Mind builder wires the <script> tag for logic-week.js into index.html,
 // this can be undefined - every use below is gated so the screen still renders.
@@ -132,11 +132,15 @@ function renderWeek(ctx) {
   }
   showed += `</div></section>`;
 
+  const nightCheckins = cur.keys.filter((k) => IT.state.days[k] && nightCardDone(IT.state.days[k])).length;
   let routines = `<section class="card"><h2>Routines</h2><div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">`;
-  routines += rate('Stretched', cur.stretched, cur.n, { prev: prev.logged ? prev.stretched : null, prevN: prev.logged ? prev.n : null });
+  if (WL) {
+    const r = WL.routines(IT.state, start, today);
+    routines += rate('Morning done', r.morning.n, r.morning.m);
+  }
   routines += rate('Wind-down done', cur.windDown, cur.n, { prev: prev.logged ? prev.windDown : null, prevN: prev.logged ? prev.n : null });
-  routines += rate('Gym', cur.gym, null, { prev: prev.logged ? prev.gym : null });
-  if (cur.waterPoloPossible) routines += rate('Water polo', cur.waterPolo, cur.waterPoloPossible);
+  routines += rate('Night check-ins', nightCheckins, cur.n);
+  routines += `<div class="stat"><div class="line"><span>Gym</span><span class="val">${cur.gym} times</span></div></div>`;
   if (cur.dinnerPossible) routines += rate('Dinner out', cur.dinner, cur.dinnerPossible);
   routines += `</div></section>`;
 

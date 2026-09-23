@@ -208,11 +208,33 @@
     return { slips: slipsInsight(cur, prev), mindset: mindsetInsight(cur, prev, weekStartKey) };
   }
 
+  // ---------- W4: routines card ----------
+  // A day counts as "morning done" only when it has an actual d.morning object with
+  // all four checks true. A legacy day with d.stretched true but no d.morning (the
+  // pre-D1 shape) is deliberately NOT counted as done.
+  function morningDone(d) {
+    return !!(d.morning && d.morning.up && d.morning.pushups && d.morning.stretched && d.morning.shower);
+  }
+  function routines(state, start, todayKey) {
+    const cur = ITLogic.weekStats(state, start, todayKey);
+    const days = cur.keys.map((k) => state.days[k]).filter(Boolean);
+    const morning = days.filter(morningDone).length;
+    const nightCheckins = days.filter((d) => nightCardDone(d)).length;
+    return {
+      morning: { n: morning, m: cur.n },
+      windDown: { n: cur.windDown, m: cur.n },
+      nightCheckins: { n: nightCheckins, m: cur.n },
+      gym: { k: cur.gym },
+      dinner: { n: cur.dinner, m: cur.dinnerPossible },
+    };
+  }
+
   return {
     STOPWORDS, wordsFromText, topWords,
     windowKeys, windowUrges,
     triggerWords, urgeTimeBuckets, timeBucketFor, weekdaySlips, fourWeekStrip, weekBlock, patterns,
     overallLines, daysAgoText,
     insights, slipsInsight, mindsetInsight, bestRatedDayInsight,
+    morningDone, routines,
   };
 });
