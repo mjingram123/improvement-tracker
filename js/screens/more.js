@@ -1,30 +1,82 @@
-/* Improvement Tracker - More screen (backup/restore, storage health, intentions,
-   schedule, reminders). */
+/* Improvement Tracker - More screen (backup/restore, snapshot restore, storage
+   health, schedule, reminders). */
 (() => {
 'use strict';
 const IT = window.IT;
 const { esc, toggleRow, fmtLong } = IT.ui;
-const { RATINGS, dayEndOptions, shortcutsUiVisible, keyOf } = window.ITLogic;
+const { dayEndOptions, keyOf } = window.ITLogic;
+// Guarded: js/logic-more.js is a separate <script> tag (added to index.html/sw.js
+// SHELL by the Mind builder per CONTRACTS.md M1); fall back to inline copies so
+// this screen still works if that wiring lands after this file does.
+const { recentSnapshotKeys, snapshotDateKey } = window.ITLogicMore || {
+  recentSnapshotKeys: (keys, limit) => (keys || []).map(String).filter((k) => k.startsWith('snap:')).sort().reverse().slice(0, limit || 7),
+  snapshotDateKey: (k) => String(k).slice(5),
+};
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']; // Sun..Sat
+const FRAMING_LINE = 'A private notebook for the habits and mindset you are working on. Nothing leaves this phone.';
 
-const INTENTION_PLACEHOLDERS = {
-  curiosity: 'ask the second question',
-  story: "let it be someone else's story too",
-  pauses: 'count to five before responding',
-  present: 'put the phone in the other room',
-};
-function renderIntentions() {
-  const it = IT.state.settings.intentions;
-  let out = `<section class="card"><h2>Intentions</h2>
-    <div class="field-group" style="margin-top:12px"><span class="field-label">Why I'm doing this</span>
-      <textarea class="field" rows="3" data-action="intention-why" placeholder="What this is for, in your own words.">${esc(it.why)}</textarea></div>`;
-  for (const r of RATINGS) {
-    out += `<div class="field-group" style="margin-top:12px"><span class="field-label">${esc(r.label)}</span>
-      <input class="field" type="text" data-action="intention-note" data-arg="${r.key}" value="${esc(it.notes[r.key])}" placeholder="${esc(INTENTION_PLACEHOLDERS[r.key])}"></div>`;
-  }
-  out += `</section>`;
-  return out;
+// ---------- IndexedDB reader (own, small; same DB/store names as js/core.js) ----------
+const IDB_NAME = 'improvement-tracker';
+const IDB_STORE = 'kv';
+function idbAvailable() { return 'indexedDB' in window; }
+function idbOpenMore() {
+  return new Promise((resolve, reject) => {
+    if (!idbAvailable()) return reject(new Error('no idb'));
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+    // No onupgradeneeded: this screen never creates the DB, only reads it.
+    // If it does not exist yet, the store will be missing and reads fail,
+    // which snapshotSection treats the same as "no snapshots".
+  });
+}
+async function idbKeysMore() {
+  const db = await idbOpenMore();
+  return new Promise((resolve, reject) => {
+    let tx;
+    try { tx = db.transaction(IDB_STORE, 'readonly'); } catch (e) { return reject(e); }
+    const r = tx.objectStore(IDB_STORE).getAllKeys();
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function idbGetMore(key) {
+  const db = await idbOpenMore();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const r = tx.objectStore(IDB_STORE).get(key);
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+
+// Snapshot restore (R1) UI state: which key (if any) is armed for a confirming
+// second tap. Module-level so it survives the re-render after arming, but resets
+// whenever the More screen is left (tab switch re-renders from scratch anyway).
+let snapshotKeys = null; // null = not loaded yet; [] = loaded, none found
+let armedSnapshotKey = null;
+function loadSnapshotKeys() {
+  if (!idbAvailable()) { snapshotKeys = []; return; }
+  idbKeysMore().then((keys) => {
+    snapshotKeys = recentSnapshotKeys(keys, 7);
+    IT.render();
+  }).catch(() => { snapshotKeys = []; IT.render(); });
+}
+function renderSnapshotRestore() {
+  if (!idbAvailable()) return '';
+  if (snapshotKeys === null) { loadSnapshotKeys(); return ''; }
+  if (!snapshotKeys.length) return '';
+  const rows = snapshotKeys.map((key) => {
+    const label = fmtLong(snapshotDateKey(key));
+    if (key === armedSnapshotKey) {
+      return `<div class="row" style="align-items:center"><span class="label">${esc(label)}</span>
+        <button class="btn primary" type="button" data-action="snapshot-merge" data-arg="${esc(key)}">Merge this snapshot</button></div>`;
+    }
+    return `<button class="row" type="button" data-action="snapshot-pick" data-arg="${esc(key)}" aria-label="${esc(label)}">
+      <span class="label">${esc(label)}</span></button>`;
+  }).join('');
+  return `<div class="field-group" style="margin-top:14px"><span class="field-label">Restore from a daily snapshot</span>${rows}</div>`;
 }
 function renderMore() {
   const s = IT.state.settings;
@@ -35,7 +87,6 @@ function renderMore() {
   const dot = (ok) => `<span class="status-dot${ok ? '' : ' warn'}"></span>`;
   const chips = (label, arr, action) => `<div class="chipgroup"><div class="label">${esc(label)}</div><div class="daychips">${[1, 2, 3, 4, 5, 6, 0].map((wd) => `<button type="button" data-action="${action}" data-arg="${wd}" aria-pressed="${arr.includes(wd)}"><span>${DAY_LETTERS[wd]}</span></button>`).join('')}</div></div>`;
   const dayEnd = dayEndOptions(s.rolloverHour);
-  const scVisible = shortcutsUiVisible(s);
 
   return `<div class="screen-14">
   <h1 class="title">More</h1>
@@ -51,6 +102,7 @@ function renderMore() {
     <div class="field-group" style="margin-top:12px"><span class="field-label">Or paste backup text</span>
       <textarea class="field" id="import-text" rows="2" placeholder="{&quot;days&quot;: [ ... ]}"></textarea></div>
     <div class="btn-row" style="margin-top:10px;align-items:center"><button class="btn" type="button" data-action="import-text">Merge</button><span class="muted small">Newer entries win, nothing is deleted.</span></div>
+    ${renderSnapshotRestore()}
   </section>
   <section class="card"><h2>Storage health</h2>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
@@ -61,11 +113,9 @@ function renderMore() {
     </div>
     <p class="muted small" style="margin-top:10px">Two independent stores on the device plus a previous-save copy. If one is lost the app restores from another on next open. Still, keep a backup file.</p>
   </section>
-  ${renderIntentions()}
   <section class="card"><h2>Schedule</h2>
     <div style="display:flex;flex-direction:column;gap:16px;margin-top:14px">
       ${chips('Hangover prompt days', s.hangoverDays, 'set-hangover')}
-      ${chips('Water polo days', s.waterPoloDays, 'set-waterpolo')}
       ${chips('Dinner out days', s.dinnerDays, 'set-dinner')}
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
         <span style="font-size:0.9375rem">Day ends at</span>
@@ -80,9 +130,9 @@ function renderMore() {
     <p class="muted small" style="margin-top:6px">Anyone who guesses the topic can read it, so keep it long and random.</p>
     <div class="btn-row" style="margin-top:10px"><button class="btn" type="button" data-action="ntfy-test" ${s.ntfyTopic ? '' : 'disabled'}>Send test</button></div>
     ${toggleRow({ label: 'Timer pings', hint: 'Pings 15 or 10 minutes after a timer starts. Cancelling the timer cannot recall the ping.', checked: s.ntfyTimers, action: 'settings-bool', arg: 'ntfyTimers' })}
-    ${scVisible ? `<div style="margin-top:6px">${toggleRow({ label: 'Shortcut timers', hint: 'If you make Shortcuts named Wind Down and Ride It Out that start a 15 and 10 minute timer, the app can launch them.', checked: s.useShortcutTimers, action: 'settings-bool', arg: 'useShortcutTimers' })}</div>` : ''}
   </section>
   ${IT.onboarding.renderSetupInMore()}
+  <p class="muted small" style="text-align:center;margin-top:4px">${esc(FRAMING_LINE)}</p>
   </div>`;
 }
 
@@ -108,10 +158,18 @@ IT.registerActions({
     doMergeFrom(txt);
   },
   'set-hangover': (arg) => setDays('hangoverDays', Number(arg)),
-  'set-waterpolo': (arg) => setDays('waterPoloDays', Number(arg)),
   'set-dinner': (arg) => setDays('dinnerDays', Number(arg)),
   'rollover': (arg) => { IT.state.settings.rolloverHour = Number(arg); IT.save(); IT.render(); },
   'ntfy-test': () => IT.ntfyTest(),
+  'snapshot-pick': (arg) => { armedSnapshotKey = arg; IT.render(); },
+  'snapshot-merge': (arg) => {
+    idbGetMore(arg).then((snapshot) => {
+      armedSnapshotKey = null;
+      snapshotKeys = null; // force a fresh read on the next render
+      if (!snapshot) { IT.toast('That snapshot is gone.'); IT.render(); return; }
+      doMergeFrom(JSON.stringify(snapshot));
+    }).catch(() => { armedSnapshotKey = null; snapshotKeys = null; IT.toast('Could not read that snapshot.'); IT.render(); });
+  },
 });
 IT.registerChange({
   'settings-bool': (checked, arg) => { IT.state.settings[arg] = checked; IT.save(); IT.render(); },
@@ -123,7 +181,5 @@ IT.registerChange({
 });
 IT.registerInput({
   'ntfy-topic': (value) => { IT.state.settings.ntfyTopic = value.trim(); IT.saveSoon(); },
-  'intention-why': (value) => { IT.state.settings.intentions.why = value; IT.saveSoon(); },
-  'intention-note': (value, arg) => { IT.state.settings.intentions.notes[arg] = value; IT.saveSoon(); },
 });
 })();
