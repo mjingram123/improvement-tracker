@@ -111,6 +111,10 @@ p { margin: 0; }
 .check::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; }
 .check-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 0; width: 100%; background: none; border: 0; text-align: left; color: var(--text); }
 .check-row .check { margin-left: -2px; }
+/* Rows that carry aria-pressed on the row button (Day morning checks, Mind focus): fill the inner circle. */
+.check-row[aria-pressed="true"] .check { background: var(--green); border-color: var(--green); }
+.check-row[aria-pressed="true"] .check svg { visibility: visible; }
+
 .check-row .label { flex: 1; font-size: 1.0625rem; font-weight: 500; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
 /* fields */
