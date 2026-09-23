@@ -309,7 +309,7 @@ test('defaultTab: between rollover hour and 15:00 is day', () => {
   assert.equal(L.defaultTab(new Date(2026, 8, 12, 14, 59, 0), 4), 'day');
 });
 
-// ---------- night flow ----------
+// ---------- night flow (wave 1 N1: 3 steps, ratings moved to Mind) ----------
 test('nightCardDone: false with nothing filled in', () => {
   assert.equal(L.nightCardDone(L.defaultDay()), false);
 });
@@ -317,7 +317,7 @@ test('nightCardDone: true when wind-down is done', () => {
   const d = L.defaultDay(); d.windDown.done = true;
   assert.equal(L.nightCardDone(d), true);
 });
-test('nightCardDone: true with any nonzero rating', () => {
+test('nightCardDone: true with any nonzero rating (ratings still count even though Mind owns the UI)', () => {
   const d = L.defaultDay(); d.ratings.pauses = 2;
   assert.equal(L.nightCardDone(d), true);
 });
@@ -328,6 +328,26 @@ test('nightCardDone: true with a non-blank note', () => {
 test('nightCardDone: a whitespace-only note does not count', () => {
   const d = L.defaultDay(); d.note = '   ';
   assert.equal(L.nightCardDone(d), false);
+});
+test('nightCardDone: true when the "washed up" night check is on, with no d.night at all otherwise', () => {
+  const d = L.defaultDay(); d.night = { washed: true, tape: false };
+  assert.equal(L.nightCardDone(d), true);
+});
+test('nightCardDone: true when the "mouth tape" night check is on', () => {
+  const d = L.defaultDay(); d.night = { washed: false, tape: true };
+  assert.equal(L.nightCardDone(d), true);
+});
+test('nightCardDone: false when d.night is absent entirely (additive field, defaults false)', () => {
+  const d = L.defaultDay();
+  assert.equal('night' in d, false);
+  assert.equal(L.nightCardDone(d), false);
+});
+
+test('nightChecksOf: defaults washed/tape to false when d.night is missing', () => {
+  assert.deepEqual(L.nightChecksOf(L.defaultDay()), { washed: false, tape: false });
+});
+test('nightChecksOf: reads whatever is present on d.night', () => {
+  assert.deepEqual(L.nightChecksOf({ night: { washed: true } }), { washed: true, tape: false });
 });
 
 test('nightStepDone: step 0 tracks wind-down.done', () => {
@@ -342,17 +362,15 @@ test('nightStepDone: step 1 (slips) tracks d.nightVisited, not the lapse data', 
   d.nightVisited[1] = true;
   assert.equal(L.nightStepDone(d, 1), true);
 });
-test('nightStepDone: step 2 tracks any nonzero rating', () => {
+test('nightStepDone: step 2 tracks a non-blank note (ratings step is gone)', () => {
   const d = L.defaultDay();
   assert.equal(L.nightStepDone(d, 2), false);
-  d.ratings.curiosity = 1;
+  d.note = 'ok';
   assert.equal(L.nightStepDone(d, 2), true);
 });
-test('nightStepDone: step 3 tracks a non-blank note', () => {
-  const d = L.defaultDay();
+test('nightStepDone: an out-of-range step index (e.g. the old ratings step 3) is false', () => {
+  const d = L.defaultDay(); d.ratings.curiosity = 5;
   assert.equal(L.nightStepDone(d, 3), false);
-  d.note = 'ok';
-  assert.equal(L.nightStepDone(d, 3), true);
 });
 
 test('firstIncompleteNightStep: picks the first step whose data/nightVisited signal is empty', () => {
@@ -362,13 +380,16 @@ test('firstIncompleteNightStep: picks the first step whose data/nightVisited sig
   assert.equal(L.firstIncompleteNightStep(d), 1);
   d.nightVisited[1] = true;
   assert.equal(L.firstIncompleteNightStep(d), 2);
-  d.ratings.pauses = 3;
-  assert.equal(L.firstIncompleteNightStep(d), 3);
 });
 test('firstIncompleteNightStep: falls back to 0 when every step is already complete', () => {
   const d = L.defaultDay();
-  d.windDown.done = true; d.nightVisited = [true, true, true, true]; d.ratings.pauses = 3; d.note = 'done';
+  d.windDown.done = true; d.nightVisited = [true, true, true, true]; d.note = 'done';
   assert.equal(L.firstIncompleteNightStep(d), 0);
+});
+test('firstIncompleteNightStep: still accepts the existing four-element nightVisited array, ignoring index 3', () => {
+  const d = L.defaultDay();
+  d.windDown.done = true; d.nightVisited = [true, true, false, true]; // index 3 (old ratings step) true but irrelevant
+  assert.equal(L.firstIncompleteNightStep(d), 2); // step 2 (note) still incomplete
 });
 
 // ---------- nightVisited (E4: moved off sessionStorage onto the day object) ----------
