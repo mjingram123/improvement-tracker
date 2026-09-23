@@ -317,14 +317,15 @@ function renderDay() {
 }
 
 // ---------- Night ----------
+// Only the current step index and the "forced flow" (editing from summary) flag
+// live here; which steps are complete lives on the day object (d.nightVisited) so
+// it survives an iOS process eviction/relaunch, not just a fresh sessionStorage.
 const NIGHT_UI_KEY = 'it:nightUi';
 function loadNightUi() {
   let st = null;
   try { st = JSON.parse(sessionStorage.getItem(NIGHT_UI_KEY) || 'null'); } catch {}
   const key = todayKey();
-  if (!st || st.day !== key || !Array.isArray(st.visited) || st.visited.length !== 4) {
-    st = { day: key, visited: [false, false, false, false], step: null, forceFlow: false };
-  }
+  if (!st || st.day !== key) st = { day: key, step: null, forceFlow: false };
   return st;
 }
 function saveNightUi(st) {
@@ -412,10 +413,10 @@ function renderNight() {
   const key = todayKey();
   const d = day(key);
   const st = loadNightUi();
-  const allVisited = st.visited.every(Boolean);
+  const allVisited = d.nightVisited.every(Boolean);
   const showSummary = !st.forceFlow && (allVisited || nightCardDone(d));
   if (showSummary) return renderNightSummary(d, key);
-  if (st.step == null) { st.step = firstIncompleteNightStep(d, st.visited); saveNightUi(st); }
+  if (st.step == null) { st.step = firstIncompleteNightStep(d); saveNightUi(st); }
   return renderNightFlow(d, st);
 }
 
@@ -724,7 +725,7 @@ document.addEventListener('click', (e) => {
     case 'night-next':
     case 'night-skip': {
       const st = loadNightUi();
-      st.visited[st.step] = true;
+      d.nightVisited[st.step] = true; touch(); save();
       if (st.step < 3) st.step += 1; else st.forceFlow = false;
       saveNightUi(st); render(); break;
     }

@@ -284,41 +284,60 @@ test('nightCardDone: a whitespace-only note does not count', () => {
 
 test('nightStepDone: step 0 tracks wind-down.done', () => {
   const d = L.defaultDay();
-  assert.equal(L.nightStepDone(d, [false, false, false, false], 0), false);
+  assert.equal(L.nightStepDone(d, 0), false);
   d.windDown.done = true;
-  assert.equal(L.nightStepDone(d, [false, false, false, false], 0), true);
+  assert.equal(L.nightStepDone(d, 0), true);
 });
-test('nightStepDone: step 1 (slips) tracks the visited flag, not the data', () => {
+test('nightStepDone: step 1 (slips) tracks d.nightVisited, not the lapse data', () => {
   const d = L.defaultDay(); // no slips toggled on, a legitimate "no slips" answer
-  assert.equal(L.nightStepDone(d, [false, false, false, false], 1), false);
-  assert.equal(L.nightStepDone(d, [false, true, false, false], 1), true);
+  assert.equal(L.nightStepDone(d, 1), false);
+  d.nightVisited[1] = true;
+  assert.equal(L.nightStepDone(d, 1), true);
 });
 test('nightStepDone: step 2 tracks any nonzero rating', () => {
   const d = L.defaultDay();
-  assert.equal(L.nightStepDone(d, [false, false, false, false], 2), false);
+  assert.equal(L.nightStepDone(d, 2), false);
   d.ratings.curiosity = 1;
-  assert.equal(L.nightStepDone(d, [false, false, false, false], 2), true);
+  assert.equal(L.nightStepDone(d, 2), true);
 });
 test('nightStepDone: step 3 tracks a non-blank note', () => {
   const d = L.defaultDay();
-  assert.equal(L.nightStepDone(d, [false, false, false, false], 3), false);
+  assert.equal(L.nightStepDone(d, 3), false);
   d.note = 'ok';
-  assert.equal(L.nightStepDone(d, [false, false, false, false], 3), true);
+  assert.equal(L.nightStepDone(d, 3), true);
 });
 
-test('firstIncompleteNightStep: picks the first step whose data/visited signal is empty', () => {
+test('firstIncompleteNightStep: picks the first step whose data/nightVisited signal is empty', () => {
   const d = L.defaultDay();
-  assert.equal(L.firstIncompleteNightStep(d, [false, false, false, false]), 0);
+  assert.equal(L.firstIncompleteNightStep(d), 0);
   d.windDown.done = true;
-  assert.equal(L.firstIncompleteNightStep(d, [false, false, false, false]), 1);
-  assert.equal(L.firstIncompleteNightStep(d, [true, true, false, false]), 2);
+  assert.equal(L.firstIncompleteNightStep(d), 1);
+  d.nightVisited[1] = true;
+  assert.equal(L.firstIncompleteNightStep(d), 2);
   d.ratings.pauses = 3;
-  assert.equal(L.firstIncompleteNightStep(d, [true, true, false, false]), 3);
+  assert.equal(L.firstIncompleteNightStep(d), 3);
 });
 test('firstIncompleteNightStep: falls back to 0 when every step is already complete', () => {
   const d = L.defaultDay();
-  d.windDown.done = true; d.ratings.pauses = 3; d.note = 'done';
-  assert.equal(L.firstIncompleteNightStep(d, [true, true, true, true]), 0);
+  d.windDown.done = true; d.nightVisited = [true, true, true, true]; d.ratings.pauses = 3; d.note = 'done';
+  assert.equal(L.firstIncompleteNightStep(d), 0);
+});
+
+// ---------- nightVisited (E4: moved off sessionStorage onto the day object) ----------
+test('defaultDay: nightVisited defaults to four falses', () => {
+  assert.deepEqual(L.defaultDay().nightVisited, [false, false, false, false]);
+});
+test('normalize: old saves with no nightVisited on a day get the default shape (additive)', () => {
+  const out = L.normalize({ days: { '2026-09-07': { stretched: true } } });
+  assert.deepEqual(out.days['2026-09-07'].nightVisited, [false, false, false, false]);
+});
+test('normalize: a saved nightVisited array is preserved', () => {
+  const out = L.normalize({ days: { '2026-09-07': { nightVisited: [true, true, false, false] } } });
+  assert.deepEqual(out.days['2026-09-07'].nightVisited, [true, true, false, false]);
+});
+test('normalize: a wrong-typed nightVisited (not an array) falls back to the default', () => {
+  const out = L.normalize({ days: { '2026-09-07': { nightVisited: 'oops' } } });
+  assert.deepEqual(out.days['2026-09-07'].nightVisited, [false, false, false, false]);
 });
 
 // ---------- recentUrges / fmtTime ----------

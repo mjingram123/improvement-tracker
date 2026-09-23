@@ -81,6 +81,9 @@
       lapses: { scroll: false, porn: false, nag: false }, lapseNotes: { scroll: '', porn: '', nag: '' },
       ratings: { curiosity: 0, story: 0, pauses: 0, present: 0 },
       note: '', windDown: { endsAt: null, done: false },
+      // Which of the 4 night-flow steps have been visited this day. Lives on the day
+      // object (not sessionStorage) so it survives an iOS process eviction/relaunch.
+      nightVisited: [false, false, false, false],
     };
   }
   function normalize(s) {
@@ -106,6 +109,7 @@
         lapseNotes: { ...dd.lapseNotes, ...(v.lapseNotes || {}) },
         ratings: { ...dd.ratings, ...(v.ratings || {}) },
         windDown: { ...dd.windDown, ...(v.windDown || {}) },
+        nightVisited: Array.isArray(v.nightVisited) ? Array.from({ length: 4 }, (_, i) => !!v.nightVisited[i]) : dd.nightVisited.slice(),
       };
     }
     out.urges = Array.isArray(s.urges) ? s.urges.filter((u) => u && u.id && u.at) : [];
@@ -226,20 +230,20 @@
   function nightCardDone(d) {
     return !!(d.windDown.done || RATINGS.some((r) => d.ratings[r.key] > 0) || (d.note && d.note.trim().length > 0));
   }
-  // Step completeness for the 4-step flow. `visited` is the sessionStorage-tracked
-  // array of 4 booleans (step 1, Slips, has no data-only signal: turning zero slips on
-  // is a valid, complete answer, so it relies on the visited flag instead).
-  function nightStepDone(d, visited, i) {
+  // Step completeness for the 4-step flow. Step 1 (Slips) has no data-only signal:
+  // turning zero slips on is a valid, complete answer, so it relies on d.nightVisited
+  // instead - persisted on the day object so it survives an iOS process eviction.
+  function nightStepDone(d, i) {
     switch (i) {
       case 0: return !!(d.windDown && d.windDown.done);
-      case 1: return !!(visited && visited[1]);
+      case 1: return !!(d.nightVisited && d.nightVisited[1]);
       case 2: return RATINGS.some((r) => d.ratings[r.key] > 0);
       case 3: return !!(d.note && d.note.trim().length > 0);
       default: return false;
     }
   }
-  function firstIncompleteNightStep(d, visited) {
-    for (let i = 0; i < 4; i++) if (!nightStepDone(d, visited, i)) return i;
+  function firstIncompleteNightStep(d) {
+    for (let i = 0; i < 4; i++) if (!nightStepDone(d, i)) return i;
     return 0;
   }
 
