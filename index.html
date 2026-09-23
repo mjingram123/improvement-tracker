@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="fonts/outfit.css">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/screens/day.css">
+<link rel="stylesheet" href="css/screens/mind.css">
 <link rel="stylesheet" href="css/screens/night.css">
 <link rel="stylesheet" href="css/screens/week.css">
 <link rel="stylesheet" href="css/screens/more.css">
@@ -33,6 +34,10 @@
     <button class="tab" data-tab="day" type="button">
       <span class="tab-pill"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg></span>
       <span class="tab-label">Day</span>
+    </button>
+    <button class="tab" data-tab="mind" type="button">
+      <span class="tab-pill"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2.121 5.379L8.5 15.5l2.121-5.379L15.5 8.5z"/></svg></span>
+      <span class="tab-label">Mind</span>
     </button>
     <button class="tab" data-tab="night" type="button">
       <span class="tab-pill"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"/></svg></span>
@@ -51,9 +56,16 @@
   <div id="toast" class="toast" hidden></div>
 </div>
 <script src="logic.js"></script>
+<script src="js/logic-day.js"></script>
+<script src="js/logic-mind.js"></script>
+<script src="js/logic-night.js"></script>
+<script src="js/logic-week.js"></script>
+<script src="js/logic-urge.js"></script>
+<script src="js/logic-more.js"></script>
 <script src="js/core.js"></script>
 <script src="js/screens/onboarding.js"></script>
 <script src="js/screens/day.js"></script>
+<script src="js/screens/mind.js"></script>
 <script src="js/screens/night.js"></script>
 <script src="js/screens/week.js"></script>
 <script src="js/screens/more.js"></script>

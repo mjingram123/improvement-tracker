@@ -1,0 +1,19 @@
+/* Improvement Tracker - Mind screen (Prepare/Reflect segmented control, focus
+   detail rows, edit-intentions details card). Defined independently of
+   css/screens/more.css's "Day ends at" segmented control (same README look,
+   "Segmented (Day ends at)") so this screen has no cross-file style dependency. */
+.mind-segmented { display: flex; background: var(--card2); border-radius: 22px; padding: 3px; margin-bottom: 2px; }
+.mind-segmented button { flex: 1; min-height: 38px; padding: 0 12px; border: 0; border-radius: 19px; background: transparent; color: var(--muted); font-size: 0.875rem; font-weight: 600; transition: background .15s, color .15s; }
+.mind-segmented button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+
+.mind-focus-detail { display: flex; flex-direction: column; gap: 4px; }
+.mind-focus-note { font-size: 0.9375rem; line-height: 1.4; margin: 0; color: var(--text); }
+
+/* Edit intentions: collapsible via native <details>, collapsed by default. */
+.mind-intentions summary { cursor: pointer; list-style: none; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 1.125rem; color: var(--text); }
+.mind-intentions summary::-webkit-details-marker { display: none; }
+.mind-intentions summary::after { content: '\2304'; float: right; color: var(--muted); }
+.mind-intentions[open] summary::after { content: '\2303'; }
+.mind-intentions input.field,
+.mind-intentions textarea.field { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mind-intentions textarea.field { white-space: normal; }
