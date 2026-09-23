@@ -3,7 +3,7 @@
 'use strict';
 const IT = window.IT;
 const { esc, toggleRow, checkRow, checkSvg, doneCircleSvg, bannerSvg, fmtLong } = IT.ui;
-const { HANGOVER, weekdayOf } = window.ITLogic;
+const { HANGOVER, RATINGS, weekdayOf } = window.ITLogic;
 
 // Pure morning-checklist helpers (D1). Kept inline so day.js works standalone
 // even before js/logic-day.js is wired into index.html/sw.js by the Mind
@@ -29,6 +29,18 @@ function morningCardDone(morning, hangoverActive, hangoverKitComplete) {
 function kitChip({ label, checked, action, arg }) {
   return `<button class="kitchip" type="button" data-action="${action}" data-arg="${esc(arg || '')}" aria-pressed="${checked}">
     <span class="dot">${checkSvg(12)}</span>${esc(label)}</button>`;
+}
+
+// D3: "Today: <focus label>" muted line under the date title, plus the matching
+// intentions note when non-empty. Nothing rendered when d.mindFocus is unset.
+function renderFocusLine(d, s) {
+  const key = d.mindFocus;
+  if (!key) return '';
+  const rating = RATINGS.find((r) => r.key === key);
+  if (!rating) return '';
+  const note = (s.intentions && s.intentions.notes && s.intentions.notes[key]) || '';
+  const noteLine = note.trim() ? `<span class="meta">${esc(note.trim())}</span>` : '';
+  return `<div class="focus-line"><span class="meta">Today: ${esc(rating.label)}</span>${noteLine}</div>`;
 }
 
 function renderDay() {
@@ -62,7 +74,8 @@ function renderDay() {
   const onboarding = IT.onboarding.renderOnboarding();
   const restoredFrom = IT.restoredFrom;
   const banner = restoredFrom ? `<div class="banner ok">${bannerSvg}Restored your data from the ${esc(restoredFrom)}. Consider making a backup in More.</div>` : '';
-  const header = `<div class="screen-head"><h1 class="title">${esc(fmtLong(key))}</h1></div>`;
+  const focusLine = renderFocusLine(d, s);
+  const header = `<div class="screen-head"><h1 class="title">${esc(fmtLong(key))}</h1>${focusLine}</div>`;
   return `<div class="screen-18">${onboarding}${header}${banner}${card}${commit}</div>`;
 }
 
