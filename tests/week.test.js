@@ -253,3 +253,38 @@ test('routines: n of m counts for morning, wind-down, night check-ins, gym, dinn
   assert.deepEqual(r.gym, { k: 1 });
   assert.deepEqual(r.dinner, { n: 1, m: 1 });
 });
+
+// ---------- weeklyReview ----------
+test('weeklyReview: null when missing or all-empty, populated when any field has text', () => {
+  const s = makeState();
+  assert.equal(W.weeklyReview(s, '2026-09-14'), null);
+  s.reviews = { '2026-09-14': { worked: '', inTheWay: '', next: '', at: 1 } };
+  assert.equal(W.weeklyReview(s, '2026-09-14'), null);
+  s.reviews['2026-09-14'].next = 'sleep earlier';
+  assert.deepEqual(W.weeklyReview(s, '2026-09-14'), { worked: '', inTheWay: '', next: 'sleep earlier' });
+});
+
+// ---------- journalEntries ----------
+test('journalEntries: includes note, mind-moment-only days, and slip notes with help, newest first', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-16';
+  setDay(s, '2026-09-14', { note: 'first day' });
+  setDay(s, '2026-09-15', { mindMoment: 'noticed I paused before replying' });
+  setDay(s, '2026-09-16', {
+    lapses: { scroll: true, porn: false, nag: false },
+    lapseNotes: { scroll: 'waiting for the kettle', porn: '', nag: '' },
+    lapseHelp: { scroll: 'put the phone in another room', porn: '', nag: '' },
+  });
+  const entries = W.journalEntries(s, start, today);
+  assert.equal(entries.length, 3);
+  assert.equal(entries[0].key, '2026-09-16');
+  assert.equal(entries[0].lapses[0].help, 'put the phone in another room');
+  assert.equal(entries[1].mindMoment, 'noticed I paused before replying');
+  assert.equal(entries[2].note, 'first day');
+});
+test('journalEntries: a day with a lapse flag but no note text is not included for that lapse', () => {
+  const s = makeState();
+  const start = '2026-09-14', today = '2026-09-14';
+  setDay(s, '2026-09-14', { lapses: { scroll: true, porn: false, nag: false }, lapseNotes: { scroll: '', porn: '', nag: '' } });
+  assert.deepEqual(W.journalEntries(s, start, today), []);
+});

@@ -144,13 +144,27 @@ function renderWeek(ctx) {
   if (cur.dinnerPossible) routines += rate('Dinner out', cur.dinner, cur.dinnerPossible);
   routines += `</div></section>`;
 
-  const entries = cur.keys.slice().reverse().map((k) => {
-    const d = IT.state.days[k]; if (!d) return '';
-    const notes = LAPSES.filter((l) => d.lapses[l.key] && d.lapseNotes[l.key]).map((l) => `<div class="note">before ${l.key === 'scroll' ? 'scrolling' : l.key === 'nag' ? 'nagging' : 'porn'}: ${esc(d.lapseNotes[l.key])}</div>`).join('');
-    if (!d.note && !notes) return '';
-    return `<div class="entry"><div class="d">${esc(fmtLong(k))}</div>${d.note ? `<div class="q">${esc(d.note)}</div>` : ''}${notes}</div>`;
-  }).join('');
-  const journal = `<section class="card"><h2>Journal</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">${entries || '<p class="muted small">Nothing written yet.</p>'}</div></section>`;
+  const weeklyReview = WL ? WL.weeklyReview(IT.state, start) : null;
+  const reviewBlock = weeklyReview ? `<div class="entry"><div class="kicker-caps">Weekly review</div>
+    ${weeklyReview.worked ? `<div class="q">${esc(weeklyReview.worked)}</div>` : ''}
+    ${weeklyReview.inTheWay ? `<div class="q">${esc(weeklyReview.inTheWay)}</div>` : ''}
+    ${weeklyReview.next ? `<div class="q">${esc(weeklyReview.next)}</div>` : ''}</div>` : '';
+
+  let entries;
+  if (WL) {
+    entries = WL.journalEntries(IT.state, start, today).map((e) => {
+      const lapseLines = e.lapses.map((l) => `<div class="note">before ${l.key === 'scroll' ? 'scrolling' : l.key === 'nag' ? 'nagging' : 'porn'}: ${esc(l.note)}</div>${l.help ? `<div class="note help">next time: ${esc(l.help)}</div>` : ''}`).join('');
+      return `<div class="entry"><div class="d">${esc(fmtLong(e.key))}</div>${e.note ? `<div class="q">${esc(e.note)}</div>` : ''}${e.mindMoment ? `<div class="note">moment: ${esc(e.mindMoment)}</div>` : ''}${lapseLines}</div>`;
+    }).join('');
+  } else {
+    entries = cur.keys.slice().reverse().map((k) => {
+      const d = IT.state.days[k]; if (!d) return '';
+      const notes = LAPSES.filter((l) => d.lapses[l.key] && d.lapseNotes[l.key]).map((l) => `<div class="note">before ${l.key === 'scroll' ? 'scrolling' : l.key === 'nag' ? 'nagging' : 'porn'}: ${esc(d.lapseNotes[l.key])}</div>`).join('');
+      if (!d.note && !notes) return '';
+      return `<div class="entry"><div class="d">${esc(fmtLong(k))}</div>${d.note ? `<div class="q">${esc(d.note)}</div>` : ''}${notes}</div>`;
+    }).join('');
+  }
+  const journal = `<section class="card"><h2>Journal</h2><div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">${reviewBlock}${entries || (reviewBlock ? '' : '<p class="muted small">Nothing written yet.</p>')}</div></section>`;
 
   return `<div class="screen-14">${nav}${whyLine}${banner}${patternsCard}${slips}${showed}${routines}${journal}${overallCard}</div>`;
 }

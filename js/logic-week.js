@@ -229,6 +229,32 @@
     };
   }
 
+  // ---------- W5: journal ----------
+  function weeklyReview(state, weekStartKey) {
+    const r = state.reviews && state.reviews[weekStartKey];
+    if (!r) return null;
+    const worked = (r.worked || '').trim(), inTheWay = (r.inTheWay || '').trim(), next = (r.next || '').trim();
+    if (!worked && !inTheWay && !next) return null;
+    return { worked: r.worked || '', inTheWay: r.inTheWay || '', next: r.next || '' };
+  }
+  function journalEntries(state, start, todayKey) {
+    const keys = allWeekKeys(start).filter((k) => k <= todayKey).slice().reverse();
+    const out = [];
+    for (const k of keys) {
+      const d = state.days[k];
+      if (!d) continue;
+      const mindMoment = (d.mindMoment || '').trim();
+      const lapses = LAPSES.filter((l) => d.lapses[l.key] && d.lapseNotes[l.key]).map((l) => ({
+        key: l.key,
+        note: d.lapseNotes[l.key],
+        help: (d.lapseHelp && d.lapseHelp[l.key]) || '',
+      }));
+      if (!d.note && !mindMoment && !lapses.length) continue;
+      out.push({ key: k, note: d.note || '', mindMoment, lapses });
+    }
+    return out;
+  }
+
   return {
     STOPWORDS, wordsFromText, topWords,
     windowKeys, windowUrges,
@@ -236,5 +262,6 @@
     overallLines, daysAgoText,
     insights, slipsInsight, mindsetInsight, bestRatedDayInsight,
     morningDone, routines,
+    weeklyReview, journalEntries,
   };
 });
