@@ -4,7 +4,7 @@ Ordered. Top is next. Each ticket has a done condition. Bugs from QA go to the t
 
 ## Now
 
-(wave 1 merged; awaiting Michael's checkpoint go for the QA wave)
+(empty; wave 1 and its QA fixes are live. Next tickets come from Michael's real use.)
 
 ## Next
 
@@ -19,6 +19,8 @@ Ordered. Top is next. Each ticket has a done condition. Bugs from QA go to the t
 - Weekly review prompt on Sunday afternoon with three reflection questions.
 
 ## Done
+
+- [x] QA wave fixes: Mind toggle, day chips, and Day-ends-at hit areas; framing subtitle on the More setup card.
 
 - [x] D1 Morning checklist replaces the single Stretched toggle: Up on time, 30 push ups, Stretched, Shower and shave (check rows, d.
 - [x] D2 Commitments: remove water polo; keep Gym (log when it happens) and Dinner out on its days.
