@@ -2,41 +2,9 @@
 
 Ordered. Top is next. Each ticket has a done condition. Bugs from QA go to the top.
 
-## Now (wave 1: six parallel builders, one per screen; see CONTRACTS.md)
+## Now
 
-Day
-- [ ] D1 Morning checklist replaces the single Stretched toggle: Up on time, 30 push ups, Stretched, Shower and shave (check rows, d.morning). Keep d.stretched in sync. Morning done when all four plus the hangover kit when shown.
-- [ ] D2 Commitments: remove water polo; keep Gym (log when it happens) and Dinner out on its days.
-- [ ] D3 Under the date, show "Today: <focus skill label>" muted when d.mindFocus is set, with the matching intentions note if any.
-
-Mind (new tab between Day and Night)
-- [ ] M1 Tab bar becomes Day, Mind, Night, Week, More with a new outline icon; sw.js SHELL lists every new file from all builders (js/screens/mind.js, css/screens/mind.css, js/logic-day.js, js/logic-mind.js, js/logic-night.js, js/logic-week.js, js/logic-urge.js, js/logic-more.js; missing files are fine to precache-skip, so guard addAll with individual fetches that ignore failures).
-- [ ] M2 Prepare half: pick today's focus among the four skills (d.mindFocus), shows that skill's intentions note and the why text. Segmented Prepare | Reflect at top, default Prepare before 15:00.
-- [ ] M3 Reflect half: the four 1 to 5 ratings (same d.ratings), each with its intentions note under the label, plus a textarea "A moment today where I..." (d.mindMoment).
-- [ ] M4 Intentions editing moves here (collapsible "Edit intentions" section, same settings.intentions fields, ellipsis on long placeholders).
-- [ ] M5 Weekly review card in Reflect from Sunday 15:00 through the following Tuesday: three fields (What worked, What got in the way, One thing for next week) saved to state.reviews[weekStartKey]; collapsed with Edit once any field is filled. Pure eligibility function with tests.
-
-Night
-- [ ] N1 Flow shrinks to three steps: Wind-down (timer plus two checks: Washed up, Mouth tape and vaseline, d.night), Slips, One sentence. Update the step functions in logic.js (the only allowed logic.js edit) and tests. Summary gains a Mind row: rating summary if any rating exists, otherwise "Not rated yet" with a link that switches to the Mind tab.
-- [ ] N2 Slips: optional "What would help next time?" field under each slip note (d.lapseHelp). Under the scrolling slip, an optional numeric field "Minutes over, if you know" (d.scrollMinutes).
-
-Week
-- [ ] W1 Patterns card over the last 28 days: top trigger words per slip type (urge triggers plus lapse notes, lowercase, stopwords dropped, 3 letters minimum), urges by time bucket (morning 4-12, afternoon 12-17, evening 17-22, late 22-4), slips by weekday, and a four-week strip of identical small blocks (slip days per type, nights checked in, average rating). Under three data points: "Patterns appear after a few entries."
-- [ ] W2 Overall card at the bottom: "Last porn slip ..." and "Last scrolling slip ..." lines, neutral style always, removed from the week-scoped Slips card.
-- [ ] W3 Insight sentences: up to one per Slips card and How I showed up card, neutral, no exclamation points, comparisons only when last week has logged data.
-- [ ] W4 Routines: Morning done n of m (all four morning checks), Wind-down done, Night check-ins n of m (nightCardDone), Gym "4 times", Dinner out n of m; water polo row removed.
-- [ ] W5 Journal: weekly review answers at the top of that week, mind moments, slip help lines in italics.
-
-Urge
-- [ ] U1 Gave in on porn or scrolling sets that day's lapse flag (day from urgeDayKeyFor) and copies the trigger into the lapse note when empty.
-- [ ] U2 Six trigger chips above the field from the most used triggers in the last 28 days, defaults bored, tired, alone, stressed, late, drinking; tap appends.
-- [ ] U3 After Gave in, a short inline follow-up in the overlay: optional "What would help next time?" (urge.help) with Done and Skip.
-- [ ] U4 Remove the Shortcuts timer link from the overlay.
-
-More
-- [ ] R1 Snapshot restore: list the last seven daily snapshots from IndexedDB (own small reader, same DB and store names) with dates; tapping merges with mergeInto semantics and toasts counts.
-- [ ] R2 Framing line in the setup card subtitle and at the bottom of More: "A private notebook for the habits and mindset you are working on. Nothing leaves this phone."
-- [ ] R3 Remove the Shortcuts timers toggle, help text, and setting UI. Remove the Intentions card (Mind owns it now). Remove the water polo chips row from Schedule.
+(wave 1 merged; awaiting Michael's checkpoint go for the QA wave)
 
 ## Next
 
@@ -51,6 +19,29 @@ More
 - Weekly review prompt on Sunday afternoon with three reflection questions.
 
 ## Done
+
+- [x] D1 Morning checklist replaces the single Stretched toggle: Up on time, 30 push ups, Stretched, Shower and shave (check rows, d.
+- [x] D2 Commitments: remove water polo; keep Gym (log when it happens) and Dinner out on its days.
+- [x] D3 Under the date, show "Today: <focus skill label>" muted when d.
+- [x] M1 Tab bar becomes Day, Mind, Night, Week, More with a new outline icon; sw.
+- [x] M2 Prepare half: pick today's focus among the four skills (d.
+- [x] M3 Reflect half: the four 1 to 5 ratings (same d.
+- [x] M4 Intentions editing moves here (collapsible "Edit intentions" section, same settings.
+- [x] M5 Weekly review card in Reflect from Sunday 15:00 through the following Tuesday: three fields (What worked, What got in the way, One thing for next week) saved to state.
+- [x] N1 Flow shrinks to three steps: Wind-down (timer plus two checks: Washed up, Mouth tape and vaseline, d.
+- [x] N2 Slips: optional "What would help next time?" field under each slip note (d.
+- [x] W1 Patterns card over the last 28 days: top trigger words per slip type (urge triggers plus lapse notes, lowercase, stopwords dropped, 3 letters minimum), urges by time bucket (morning 4-12, afternoon 12-17, evening 17-22, late 22-4), slips by weekday, and a four-week strip of identical small blocks (slip days per type, nights checked in, average rating).
+- [x] W2 Overall card at the bottom: "Last porn slip .
+- [x] W3 Insight sentences: up to one per Slips card and How I showed up card, neutral, no exclamation points, comparisons only when last week has logged data.
+- [x] W4 Routines: Morning done n of m (all four morning checks), Wind-down done, Night check-ins n of m (nightCardDone), Gym "4 times", Dinner out n of m; water polo row removed.
+- [x] W5 Journal: weekly review answers at the top of that week, mind moments, slip help lines in italics.
+- [x] U1 Gave in on porn or scrolling sets that day's lapse flag (day from urgeDayKeyFor) and copies the trigger into the lapse note when empty.
+- [x] U2 Six trigger chips above the field from the most used triggers in the last 28 days, defaults bored, tired, alone, stressed, late, drinking; tap appends.
+- [x] U3 After Gave in, a short inline follow-up in the overlay: optional "What would help next time?" (urge.
+- [x] U4 Remove the Shortcuts timer link from the overlay.
+- [x] R1 Snapshot restore: list the last seven daily snapshots from IndexedDB (own small reader, same DB and store names) with dates; tapping merges with mergeInto semantics and toasts counts.
+- [x] R2 Framing line in the setup card subtitle and at the bottom of More: "A private notebook for the habits and mindset you are working on.
+- [x] R3 Remove the Shortcuts timers toggle, help text, and setting UI.
 
 - [x] T43 Intentions card in More; notes shown under Night ratings, why line under the Week navigator.
 
