@@ -64,6 +64,10 @@ function topTriggers(urges, now) {
 }
 
 let urgeKind = 'scroll';
+// Set to an urge id right after "Gave in" is tapped, while the "what would
+// help next time" follow-up card is showing in its place. Cleared on Done,
+// Skip, or closing the overlay.
+let followUpUrgeId = null;
 function pendingUrge() { return IT.state.urges.find((u) => !u.outcome) || null; }
 
 // "This week" rode/gave-in counts for the log footer.
@@ -108,10 +112,21 @@ function renderUrgeRunning(u) {
     <p class="muted small" style="text-align:center;margin-top:-8px">Wait it out. Rode it out unlocks when the timer ends.</p>
     ${renderUrgeLog()}`;
 }
+// U3: shown in place of the running state right after "Gave in" is tapped.
+// The lapse itself is already saved by the time this renders; Done/Skip only
+// decide whether urge.help gets filled in before the overlay closes.
+function renderUrgeFollowUp() {
+  return `<div class="field-group"><span class="field-label">What would help next time?</span><input class="field" id="urge-help" placeholder="one line"></div>
+    <div class="btn-stack">
+      <button class="btn primary block" type="button" data-action="urge-followup" data-arg="done">Done</button>
+      <button class="btn text block" type="button" data-action="urge-followup" data-arg="skip">Skip</button>
+    </div>`;
+}
 function renderUrgeOverlay() {
-  const u = pendingUrge();
+  const followUp = followUpUrgeId ? IT.state.urges.find((x) => x.id === followUpUrgeId) : null;
+  const u = followUp ? null : pendingUrge();
   const kicker = u ? 'riding it out' : 'urge';
-  const body = u ? renderUrgeRunning(u) : renderUrgeIdle();
+  const body = followUp ? renderUrgeFollowUp() : (u ? renderUrgeRunning(u) : renderUrgeIdle());
   return `<div class="overlay-inner" role="dialog" aria-label="Urge">
     <div class="overlay-top"><span class="kicker">${kicker}</span><button class="overlay-close" type="button" data-action="urge-close" aria-label="Close">${closeSvg}</button></div>
     ${body}
@@ -121,8 +136,8 @@ function renderUrgeOverlay() {
 IT.registerScreen('urge', { render: renderUrgeOverlay });
 
 IT.registerActions({
-  'urge-open': () => { urgeKind = 'scroll'; IT.openUrgeOverlay(); },
-  'urge-close': () => IT.closeUrgeOverlay(),
+  'urge-open': () => { urgeKind = 'scroll'; followUpUrgeId = null; IT.openUrgeOverlay(); },
+  'urge-close': () => { followUpUrgeId = null; IT.closeUrgeOverlay(); },
   'urge-kind': (arg) => {
     urgeKind = arg;
     document.querySelectorAll('[data-action="urge-kind"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.arg === arg)));
@@ -148,17 +163,36 @@ IT.registerActions({
   'urge-outcome': (arg) => {
     const [id, outcome] = arg.split(':');
     const u = IT.state.urges.find((x) => x.id === id);
-    if (u) {
-      u.outcome = outcome; u.resolvedAt = new Date().toISOString(); IT.state.meta.updatedAt = Date.now();
-      if (outcome === 'gave') {
-        const dayKey = applyGaveIn(IT.state, u);
-        IT.touch(dayKey);
-      }
+    if (!u) return;
+    u.outcome = outcome; u.resolvedAt = new Date().toISOString(); IT.state.meta.updatedAt = Date.now();
+    if (outcome === 'gave') {
+      const dayKey = applyGaveIn(IT.state, u);
+      IT.touch(dayKey);
       IT.save();
-      IT.toast(outcome === 'rode' ? 'Rode it out. Logged.' : 'Logged.');
+      // Don't close yet: show the "what would help next time" follow-up card
+      // in place of the running state. Done/Skip below finish the job.
+      followUpUrgeId = u.id;
+      IT.refreshUrgeOverlay();
+      IT.render();
+    } else {
+      IT.save();
+      IT.toast('Rode it out. Logged.');
       IT.closeUrgeOverlay();
       IT.render();
     }
+  },
+  'urge-followup': (arg) => {
+    const u = followUpUrgeId ? IT.state.urges.find((x) => x.id === followUpUrgeId) : null;
+    if (u && arg === 'done') {
+      const val = (document.querySelector('#urge-help')?.value || '').trim().slice(0, 200);
+      u.help = val;
+      IT.state.meta.updatedAt = Date.now();
+      IT.save();
+    }
+    followUpUrgeId = null;
+    IT.toast('Logged.');
+    IT.closeUrgeOverlay();
+    IT.render();
   },
 });
 })();
