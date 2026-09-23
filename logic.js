@@ -235,24 +235,37 @@
   }
 
   // ---------- night flow ----------
-  // The existing partial-done rule: the night card counts as finished with any partial input.
-  function nightCardDone(d) {
-    return !!(d.windDown.done || RATINGS.some((r) => d.ratings[r.key] > 0) || (d.note && d.note.trim().length > 0));
+  // Wave 1 N1: ratings moved to the Mind tab (d.ratings is written there now), so
+  // the Night flow shrinks to 3 steps: 0 Wind-down, 1 Slips, 2 One sentence. d.night
+  // ({washed, tape}) is additive and not yet in defaultDay/normalize (out of scope
+  // for this edit), so every read here defaults it inline.
+  function nightChecksOf(d) {
+    const n = d && d.night;
+    return { washed: !!(n && n.washed), tape: !!(n && n.tape) };
   }
-  // Step completeness for the 4-step flow. Step 1 (Slips) has no data-only signal:
+  // The existing partial-done rule: the night card counts as finished with any partial
+  // input. Ratings still count here even though the Night flow no longer renders them,
+  // so an evening that was only rated from the Mind tab still reads as a done night.
+  function nightCardDone(d) {
+    const checks = nightChecksOf(d);
+    return !!(d.windDown.done || checks.washed || checks.tape ||
+      RATINGS.some((r) => d.ratings[r.key] > 0) || (d.note && d.note.trim().length > 0));
+  }
+  // Step completeness for the 3-step flow. Step 1 (Slips) has no data-only signal:
   // turning zero slips on is a valid, complete answer, so it relies on d.nightVisited
   // instead - persisted on the day object so it survives an iOS process eviction.
+  // Callers still pass/store the existing four-element nightVisited array; index 3
+  // (formerly the ratings step) is simply never consulted anymore.
   function nightStepDone(d, i) {
     switch (i) {
       case 0: return !!(d.windDown && d.windDown.done);
       case 1: return !!(d.nightVisited && d.nightVisited[1]);
-      case 2: return RATINGS.some((r) => d.ratings[r.key] > 0);
-      case 3: return !!(d.note && d.note.trim().length > 0);
+      case 2: return !!(d.note && d.note.trim().length > 0);
       default: return false;
     }
   }
   function firstIncompleteNightStep(d) {
-    for (let i = 0; i < 4; i++) if (!nightStepDone(d, i)) return i;
+    for (let i = 0; i < 3; i++) if (!nightStepDone(d, i)) return i;
     return 0;
   }
 
@@ -295,7 +308,7 @@
     todayKeyFor, urgeDayKeyFor, allWeekKeys,
     defaultState, defaultDay, normalize,
     weekStats, lastLapse, parseSafe, mergeInto, mergeStates, backupDueDays,
-    defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
+    defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep, nightChecksOf,
     recentUrges, fmtTime, fmtHour12, dayEndOptions, shortcutsUiVisible,
   };
 });
