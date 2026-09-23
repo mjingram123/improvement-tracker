@@ -14,6 +14,7 @@ const { recentSnapshotKeys, snapshotDateKey } = window.ITLogicMore || {
 };
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']; // Sun..Sat
+const FRAMING_LINE = 'A private notebook for the habits and mindset you are working on. Nothing leaves this phone.';
 
 // ---------- IndexedDB reader (own, small; same DB/store names as js/core.js) ----------
 const IDB_NAME = 'improvement-tracker';
@@ -131,6 +132,7 @@ function renderMore() {
     ${toggleRow({ label: 'Timer pings', hint: 'Pings 15 or 10 minutes after a timer starts. Cancelling the timer cannot recall the ping.', checked: s.ntfyTimers, action: 'settings-bool', arg: 'ntfyTimers' })}
   </section>
   ${IT.onboarding.renderSetupInMore()}
+  <p class="muted small" style="text-align:center;margin-top:4px">${esc(FRAMING_LINE)}</p>
   </div>`;
 }
 
