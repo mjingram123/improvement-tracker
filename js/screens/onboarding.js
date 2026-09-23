@@ -27,7 +27,7 @@ function renderOnboarding() {
 // Moves to More once dismissed.
 function renderSetupInMore() {
   if (!IT.state.settings.onboarded) return '';
-  return `<section class="card"><h2>Getting set up</h2><div style="margin-top:6px">${onboardingRows()}</div></section>`;
+  return `<section class="card"><h2>Getting set up</h2><p class="muted small" style="margin:4px 0 0">${FRAMING_LINE}</p><div style="margin-top:6px">${onboardingRows()}</div></section>`;
 }
 
 IT.onboarding = { renderOnboarding, renderSetupInMore };
