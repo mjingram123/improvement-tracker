@@ -64,3 +64,61 @@ test('applyGaveIn: leaves the nag lapse and note untouched', () => {
   assert.equal(s.days[key].lapseNotes.nag, 'dishes');
   assert.equal(s.days[key].lapses.scroll, true);
 });
+
+// ---------- topTriggers ----------
+function urgeAt(date, trigger) {
+  return { id: Math.random().toString(36), at: date.toISOString(), kind: 'scroll', trigger };
+}
+
+test('topTriggers: ranks by frequency, most used first', () => {
+  const now = new Date(2026, 8, 20, 12, 0, 0).getTime();
+  const urges = [
+    urgeAt(new Date(2026, 8, 18), 'bored'),
+    urgeAt(new Date(2026, 8, 18), 'bored'),
+    urgeAt(new Date(2026, 8, 19), 'lonely'),
+  ];
+  const top = U.topTriggers(urges, now);
+  assert.equal(top[0], 'bored');
+  assert.ok(top.includes('lonely'));
+});
+
+test('topTriggers: splits on commas and spaces, lowercases', () => {
+  const now = new Date(2026, 8, 20, 12, 0, 0).getTime();
+  const urges = [urgeAt(new Date(2026, 8, 18), 'Bored, Tired  lonely')];
+  const top = U.topTriggers(urges, now);
+  assert.ok(top.includes('bored'));
+  assert.ok(top.includes('tired'));
+  assert.ok(top.includes('lonely'));
+});
+
+test('topTriggers: drops words under 3 letters', () => {
+  const now = new Date(2026, 8, 20, 12, 0, 0).getTime();
+  const urges = [urgeAt(new Date(2026, 8, 18), 'ok, no, bored')];
+  const top = U.topTriggers(urges, now);
+  assert.ok(!top.includes('ok'));
+  assert.ok(!top.includes('no'));
+  assert.ok(top.includes('bored'));
+});
+
+test('topTriggers: ignores urges older than 28 days', () => {
+  const now = new Date(2026, 8, 20, 12, 0, 0).getTime();
+  const urges = [urgeAt(new Date(2026, 6, 1), 'ancient')];
+  const top = U.topTriggers(urges, now);
+  assert.ok(!top.includes('ancient'));
+});
+
+test('topTriggers: pads with defaults, no duplicates, capped at six', () => {
+  const now = new Date(2026, 8, 20, 12, 0, 0).getTime();
+  const urges = [urgeAt(new Date(2026, 8, 18), 'bored')];
+  const top = U.topTriggers(urges, now);
+  assert.equal(top.length, 6);
+  assert.equal(new Set(top).size, 6);
+  assert.equal(top[0], 'bored');
+  for (const w of ['tired', 'alone', 'stressed', 'late', 'drinking']) assert.ok(top.includes(w));
+});
+
+test('topTriggers: with no urges at all, returns exactly the six defaults', () => {
+  const now = new Date(2026, 8, 20, 12, 0, 0).getTime();
+  const top = U.topTriggers([], now);
+  assert.deepEqual(top, U.DEFAULT_TRIGGERS);
+});

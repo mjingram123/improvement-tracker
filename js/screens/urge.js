@@ -29,6 +29,40 @@ function applyGaveIn(state, urge) {
   return key;
 }
 
+// Mirrored in js/logic-urge.js (tested there). Most-used trigger words across
+// all urges in the last 28 days, lowercased, split on commas/whitespace, 3
+// letters minimum, most frequent first, padded with DEFAULT_TRIGGERS (no
+// duplicates) up to 6.
+const DEFAULT_TRIGGERS = ['bored', 'tired', 'alone', 'stressed', 'late', 'drinking'];
+const TRIGGER_WINDOW_MS = 28 * 24 * 60 * 60 * 1000;
+function topTriggers(urges, now) {
+  const since = now - TRIGGER_WINDOW_MS;
+  const counts = new Map();
+  for (const u of (urges || [])) {
+    const at = new Date(u.at).getTime();
+    if (!(at >= since && at <= now)) continue;
+    const words = String(u.trigger || '').toLowerCase().split(/[,\s]+/);
+    for (const w of words) {
+      const word = w.trim();
+      if (word.length < 3) continue;
+      counts.set(word, (counts.get(word) || 0) + 1);
+    }
+  }
+  const ranked = Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([w]) => w);
+  const result = [];
+  for (const w of ranked) {
+    if (result.length >= 6) break;
+    result.push(w);
+  }
+  for (const w of DEFAULT_TRIGGERS) {
+    if (result.length >= 6) break;
+    if (!result.includes(w)) result.push(w);
+  }
+  return result.slice(0, 6);
+}
+
 let urgeKind = 'scroll';
 function pendingUrge() { return IT.state.urges.find((u) => !u.outcome) || null; }
 
@@ -48,9 +82,15 @@ function renderUrgeLog() {
     ${rows || '<p class="muted small">No urges logged yet.</p>'}
   </div>`;
 }
+function renderTriggerChips() {
+  const words = topTriggers(IT.state.urges, Date.now());
+  if (!words.length) return '';
+  return `<div class="trigger-chips">${words.map((w) => `<button type="button" class="trigger-chip" data-action="urge-chip" data-arg="${esc(w)}">${esc(w)}</button>`).join('')}</div>`;
+}
 function renderUrgeIdle() {
   return `<h1 class="title">Which pull is it?</h1>
     <div class="segmented-blue"><button type="button" data-action="urge-kind" data-arg="scroll" aria-pressed="${urgeKind === 'scroll'}">Scrolling</button><button type="button" data-action="urge-kind" data-arg="porn" aria-pressed="${urgeKind === 'porn'}">Porn</button></div>
+    ${renderTriggerChips()}
     <div class="field-group"><span class="field-label">Trigger</span><input class="field" id="urge-trigger" placeholder="two words: bored, tired, alone"></div>
     <div class="btn-stack"><button class="btn primary huge block" type="button" data-action="urge-start">Start 10 minutes</button></div>
     ${renderUrgeLog()}`;
@@ -86,6 +126,15 @@ IT.registerActions({
   'urge-kind': (arg) => {
     urgeKind = arg;
     document.querySelectorAll('[data-action="urge-kind"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.arg === arg)));
+  },
+  'urge-chip': (arg) => {
+    const input = document.querySelector('#urge-trigger');
+    if (!input) return;
+    const cur = input.value.trim();
+    input.value = cur ? `${cur}, ${arg}` : arg;
+    input.focus();
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
   },
   'urge-start': () => {
     const trigger = (document.querySelector('#urge-trigger')?.value || '').trim().slice(0, 80);

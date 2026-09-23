@@ -38,5 +38,41 @@
     return key;
   }
 
-  return { applyGaveIn };
+  const DEFAULT_TRIGGERS = ['bored', 'tired', 'alone', 'stressed', 'late', 'drinking'];
+  const TRIGGER_WINDOW_MS = 28 * 24 * 60 * 60 * 1000;
+
+  // Most-used trigger words across all urges logged in the last 28 days
+  // (relative to `now`, an epoch ms timestamp), lowercased, split on commas
+  // and whitespace, 3 letters minimum, most frequent first (ties broken
+  // alphabetically for a stable order). Padded with DEFAULT_TRIGGERS (in
+  // their listed order, skipping anything already present) up to 6 entries.
+  function topTriggers(urges, now) {
+    const since = now - TRIGGER_WINDOW_MS;
+    const counts = new Map();
+    for (const u of (urges || [])) {
+      const at = new Date(u.at).getTime();
+      if (!(at >= since && at <= now)) continue;
+      const words = String(u.trigger || '').toLowerCase().split(/[,\s]+/);
+      for (const w of words) {
+        const word = w.trim();
+        if (word.length < 3) continue;
+        counts.set(word, (counts.get(word) || 0) + 1);
+      }
+    }
+    const ranked = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([w]) => w);
+    const result = [];
+    for (const w of ranked) {
+      if (result.length >= 6) break;
+      result.push(w);
+    }
+    for (const w of DEFAULT_TRIGGERS) {
+      if (result.length >= 6) break;
+      if (!result.includes(w)) result.push(w);
+    }
+    return result.slice(0, 6);
+  }
+
+  return { applyGaveIn, topTriggers, DEFAULT_TRIGGERS };
 });
