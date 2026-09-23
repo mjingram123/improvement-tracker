@@ -169,6 +169,82 @@ test('mergeInto: junk text throws', () => {
   assert.throws(() => L.mergeInto(s, JSON.stringify({ foo: 'bar' })));
   assert.throws(() => L.mergeInto(s, ''));
 });
+test('mergeInto: incoming urge with an outcome replaces a local one that has none (exact repro from analysis)', () => {
+  const s = makeState();
+  s.urges = [{ id: 'u1', at: '2026-09-07T10:00:00.000Z', kind: 'scroll', outcome: null }];
+  const raw = JSON.stringify({ state: { urges: [{ id: 'u1', at: '2026-09-07T10:00:00.000Z', kind: 'scroll', outcome: 'gave', resolvedAt: '2026-09-07T10:11:00.000Z' }] } });
+  const r = L.mergeInto(s, raw);
+  assert.equal(r.urgesMerged, 1);
+  assert.equal(s.urges.length, 1);
+  assert.equal(s.urges[0].outcome, 'gave');
+});
+test('mergeInto: incoming urge with a newer resolvedAt replaces the local one even if both have an outcome', () => {
+  const s = makeState();
+  s.urges = [{ id: 'u1', at: '2026-09-07T10:00:00.000Z', kind: 'scroll', outcome: 'rode', resolvedAt: '2026-09-07T10:10:00.000Z' }];
+  const raw = JSON.stringify({ state: { urges: [{ id: 'u1', at: '2026-09-07T10:00:00.000Z', kind: 'scroll', outcome: 'gave', resolvedAt: '2026-09-07T10:20:00.000Z' }] } });
+  const r = L.mergeInto(s, raw);
+  assert.equal(r.urgesMerged, 1);
+  assert.equal(s.urges[0].outcome, 'gave');
+});
+test('mergeInto: incoming urge with an older resolvedAt does not replace the local one', () => {
+  const s = makeState();
+  s.urges = [{ id: 'u1', at: '2026-09-07T10:00:00.000Z', kind: 'scroll', outcome: 'rode', resolvedAt: '2026-09-07T10:20:00.000Z' }];
+  const raw = JSON.stringify({ state: { urges: [{ id: 'u1', at: '2026-09-07T10:00:00.000Z', kind: 'scroll', outcome: 'gave', resolvedAt: '2026-09-07T10:10:00.000Z' }] } });
+  const r = L.mergeInto(s, raw);
+  assert.equal(r.urgesMerged, 0);
+  assert.equal(s.urges[0].outcome, 'rode');
+});
+
+// ---------- mergeStates (cross-instance merge) ----------
+test('mergeStates: per-day newer u wins, days unique to either side are kept', () => {
+  const local = makeState();
+  local.days['2026-09-07'] = { ...L.defaultDay(), u: 100, note: 'local-old' };
+  local.days['2026-09-08'] = { ...L.defaultDay(), u: 50, note: 'local-only' };
+  const incoming = makeState();
+  incoming.days['2026-09-07'] = { ...L.defaultDay(), u: 200, note: 'incoming-new' };
+  incoming.days['2026-09-09'] = { ...L.defaultDay(), u: 10, note: 'incoming-only' };
+  const out = L.mergeStates(local, incoming);
+  assert.equal(out.days['2026-09-07'].note, 'incoming-new');
+  assert.equal(out.days['2026-09-08'].note, 'local-only');
+  assert.equal(out.days['2026-09-09'].note, 'incoming-only');
+});
+test('mergeStates: urges union by id, outcome preferred over null', () => {
+  const local = makeState();
+  local.urges = [{ id: 'u1', at: '2026-09-07T10:00:00.000Z', outcome: null }];
+  const incoming = makeState();
+  incoming.urges = [
+    { id: 'u1', at: '2026-09-07T10:00:00.000Z', outcome: 'rode', resolvedAt: '2026-09-07T10:10:00.000Z' },
+    { id: 'u2', at: '2026-09-08T10:00:00.000Z', outcome: null },
+  ];
+  const out = L.mergeStates(local, incoming);
+  assert.equal(out.urges.length, 2);
+  assert.equal(out.urges.find((u) => u.id === 'u1').outcome, 'rode');
+});
+test('mergeStates: settings/meta come from whichever side has the newer meta.updatedAt', () => {
+  const local = makeState();
+  local.meta.updatedAt = 100;
+  local.settings.ntfyTopic = 'local-topic';
+  const incoming = makeState();
+  incoming.meta.updatedAt = 200;
+  incoming.settings.ntfyTopic = 'incoming-topic';
+  const out = L.mergeStates(local, incoming);
+  assert.equal(out.settings.ntfyTopic, 'incoming-topic');
+  assert.equal(out.meta.updatedAt, 200);
+
+  const out2 = L.mergeStates(incoming, local); // local is now the "incoming" side but is older
+  assert.equal(out2.settings.ntfyTopic, 'incoming-topic'); // incoming (base) is still newer
+});
+test('mergeStates: does not mutate either argument (pure function)', () => {
+  const local = makeState();
+  local.days['2026-09-07'] = { ...L.defaultDay(), u: 1 };
+  const localSnapshot = JSON.parse(JSON.stringify(local));
+  const incoming = makeState();
+  incoming.days['2026-09-07'] = { ...L.defaultDay(), u: 2, note: 'newer' };
+  const incomingSnapshot = JSON.parse(JSON.stringify(incoming));
+  L.mergeStates(local, incoming);
+  assert.deepEqual(local, localSnapshot);
+  assert.deepEqual(incoming, incomingSnapshot);
+});
 
 // ---------- defaultTab ----------
 test('defaultTab: before rollover hour is night', () => {

@@ -7,9 +7,10 @@ const {
   LAPSES, RATINGS, HANGOVER, DAY_NAMES,
   keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
   todayKeyFor, defaultState, defaultDay, normalize,
-  weekStats: weekStatsPure, lastLapse: lastLapsePure, mergeInto, backupDueDays,
+  weekStats: weekStatsPure, lastLapse: lastLapsePure, mergeInto, mergeStates, backupDueDays,
   defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
   recentUrges, fmtTime, dayEndOptions, shortcutsUiVisible,
+  allWeekKeys, parseSafe,
 } = window.ITLogic;
 
 // ---------- constants ----------
@@ -30,7 +31,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 function todayKey() { return todayKeyFor(new Date(), state.settings.rolloverHour); }
-function weekKeys(start) { return Array.from({ length: 7 }, (_, i) => addDays(start, i)); }
 
 // ---------- icons ----------
 const checkSvg = (size = 14) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>`;
@@ -103,10 +103,6 @@ async function idbDelete(keys) {
 }
 
 // ---------- persistence ----------
-function parseSafe(json) {
-  if (!json) return null;
-  try { const v = JSON.parse(json); return v && typeof v === 'object' ? v : null; } catch { return null; }
-}
 async function loadState() {
   let ls = null, prev = null, idb = null;
   try { ls = parseSafe(localStorage.getItem(LS_KEY)); prev = parseSafe(localStorage.getItem(LS_PREV)); storageHealth.ls = 'ok'; }
@@ -124,34 +120,56 @@ async function loadState() {
     state = normalize(best.s);
     if (best.src && best.s !== ls) restoredFrom = best.src;
   }
+  lastWrittenAt = state.meta.updatedAt || 0;
   try { navigator.storage?.persist?.(); } catch {}
   try {
     if (navigator.storage?.persisted) storageHealth.persisted = (await navigator.storage.persisted()) ? 'granted' : 'not granted';
     else storageHealth.persisted = 'unknown';
   } catch { storageHealth.persisted = 'unknown'; }
 }
+// Toast at most once every 10 minutes when a write fails; the Storage health row
+// (More > Storage health) always shows the latest error text regardless.
+let lastFailToastAt = 0;
+function reportWriteFailure() {
+  const now = Date.now();
+  if (now - lastFailToastAt > 10 * 60 * 1000) {
+    lastFailToastAt = now;
+    toast('Could not save. Back up now from More.');
+  }
+}
+// The updatedAt this page last wrote to (or loaded from) localStorage. Used by
+// save() to detect that another same-origin tab has written since, so its edits
+// get merged in rather than clobbered by this page's full-state overwrite.
+let lastWrittenAt = 0;
 let saveTimer = null;
 function save() {
   state.meta.updatedAt = Math.max(state.meta.updatedAt || 0, Date.now());
+  let cur = null;
+  try { cur = localStorage.getItem(LS_KEY); } catch {}
+  const curState = parseSafe(cur);
+  if (curState && curState.meta && (curState.meta.updatedAt || 0) > lastWrittenAt) {
+    state = mergeStates(state, normalize(curState));
+    state.meta.updatedAt = Math.max(state.meta.updatedAt || 0, Date.now());
+  }
   const json = JSON.stringify(state);
   try {
-    const cur = localStorage.getItem(LS_KEY);
     if (cur && cur !== json) localStorage.setItem(LS_PREV, cur);
     localStorage.setItem(LS_KEY, json);
     storageHealth.ls = 'ok';
-  } catch { storageHealth.ls = 'write failed'; }
+  } catch (err) { storageHealth.ls = String((err && err.message) || err || 'write failed'); reportWriteFailure(); }
+  lastWrittenAt = state.meta.updatedAt;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => mirror(json), 400);
 }
 async function mirror(json) {
   try {
-    const snapKey = `snap:${keyOf(new Date())}`;
+    const snapKey = `snap:${todayKeyFor(new Date(), state.settings.rolloverHour)}`;
     await idbPut([['current', JSON.parse(json)], [snapKey, JSON.parse(json)]]);
     storageHealth.idb = 'ok';
     const keys = (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort();
     storageHealth.snaps = keys.length;
     if (keys.length > SNAP_KEEP) await idbDelete(keys.slice(0, keys.length - SNAP_KEEP));
-  } catch { storageHealth.idb = 'write failed'; }
+  } catch (err) { storageHealth.idb = String((err && err.message) || err || 'write failed'); reportWriteFailure(); }
 }
 
 // ---------- export / import ----------
@@ -449,7 +467,7 @@ function renderWeek() {
   slips += `<p class="muted small">${lp ? `Last porn slip logged ${since === 0 ? 'today' : since + (since === 1 ? ' day ago' : ' days ago')}.` : 'No porn slips logged yet.'}</p></div></section>`;
 
   let showed = `<section class="card"><h2>How I showed up</h2><div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${spark(cur.dayAvg)}
-    <div class="spark-days">${weekKeys(start).map((k, i) => `<div><b>${cur.dayAvg[i] == null ? '·' : cur.dayAvg[i].toFixed(1)}</b><span>${DAY_NAMES[weekdayOf(k)]}</span></div>`).join('')}</div>
+    <div class="spark-days">${allWeekKeys(start).map((k, i) => `<div><b>${cur.dayAvg[i] == null ? '·' : cur.dayAvg[i].toFixed(1)}</b><span>${DAY_NAMES[weekdayOf(k)]}</span></div>`).join('')}</div>
     <div class="card-divider"></div>`;
   for (const r of RATINGS) {
     const v = cur.ratingAvg[r.key], p = prev.ratingAvg[r.key];
@@ -787,8 +805,36 @@ document.addEventListener('input', (e) => {
   }
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#urge-overlay').hidden) closeUrgeOverlay(); });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); else { clearTimeout(noteTimer); save(); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { render(); }
+  else {
+    clearTimeout(noteTimer); save();
+    clearTimeout(saveTimer); mirror(JSON.stringify(state)); // eager mirror flush; pagehide below is a second, later safety net
+  }
+});
 window.addEventListener('pagehide', () => { clearTimeout(noteTimer); save(); clearTimeout(saveTimer); mirror(JSON.stringify(state)); });
+
+// ---------- cross-instance sync (another same-origin tab/window wrote it:state:v1) ----------
+function isTextFieldFocused() {
+  const el = document.activeElement;
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+}
+let pendingRenderOnBlur = false;
+window.addEventListener('storage', (e) => {
+  if (e.key !== LS_KEY || !e.newValue) return;
+  const incoming = parseSafe(e.newValue);
+  if (!incoming) return;
+  state = mergeStates(state, normalize(incoming));
+  if (isTextFieldFocused()) pendingRenderOnBlur = true;
+  else render();
+});
+document.addEventListener('blur', (e) => {
+  const t = e.target;
+  if (pendingRenderOnBlur && t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) {
+    pendingRenderOnBlur = false;
+    render();
+  }
+}, true);
 
 // ---------- boot ----------
 loadState().then(() => {

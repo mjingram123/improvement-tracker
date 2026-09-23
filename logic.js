@@ -149,21 +149,60 @@
     if (!json) return null;
     try { const v = JSON.parse(json); return v && typeof v === 'object' ? v : null; } catch { return null; }
   }
+  // An incoming urge record (same id) replaces the local one when it resolves an
+  // unresolved local urge, or when it carries a strictly newer resolvedAt.
+  function shouldReplaceUrge(local, incoming) {
+    if (incoming.outcome && !local.outcome) return true;
+    if (incoming.resolvedAt) {
+      if (!local.resolvedAt) return true;
+      if (new Date(incoming.resolvedAt) > new Date(local.resolvedAt)) return true;
+    }
+    return false;
+  }
+  // Union two urge lists by id. Returns the merged, at-sorted list plus a count of
+  // ids that were newly added or replaced (used for the urgesMerged stat).
+  function unionUrges(localUrges, incomingUrges) {
+    const byId = new Map((localUrges || []).map((u) => [u.id, u]));
+    let merged = 0;
+    for (const u of (incomingUrges || [])) {
+      const cur = byId.get(u.id);
+      if (!cur) { byId.set(u.id, u); merged++; }
+      else if (shouldReplaceUrge(cur, u)) { byId.set(u.id, u); merged++; }
+    }
+    const urges = Array.from(byId.values()).sort((a, b) => new Date(a.at) - new Date(b.at));
+    return { urges, merged };
+  }
   function mergeInto(state, rawText) {
     const parsed = parseSafe(rawText);
     const inc = parsed && parsed.state ? parsed.state : parsed;
     if (!inc || (!inc.days && !inc.urges)) throw new Error('not a tracker export');
     const incoming = normalize(inc);
-    let daysMerged = 0, urgesMerged = 0;
+    let daysMerged = 0;
     for (const [k, v] of Object.entries(incoming.days)) {
       const cur = state.days[k];
       if (!cur || (v.u || 0) > (cur.u || 0)) { state.days[k] = v; daysMerged++; }
     }
-    const ids = new Set(state.urges.map((u) => u.id));
-    for (const u of incoming.urges) if (!ids.has(u.id)) { state.urges.push(u); urgesMerged++; }
-    state.urges.sort((a, b) => new Date(a.at) - new Date(b.at));
+    const { urges, merged: urgesMerged } = unionUrges(state.urges, incoming.urges);
+    state.urges = urges;
     if (!state.settings.lastExport && incoming.settings.lastExport) state.settings.lastExport = incoming.settings.lastExport;
     return { daysMerged, urgesMerged };
+  }
+  // Cross-instance merge: combine this page's in-memory state with a version another
+  // same-origin tab just wrote to localStorage. Pure - returns a new state, never
+  // mutates either argument. Days: newer `u` wins. Urges: unioned by id (see
+  // unionUrges). Settings/meta: taken wholesale from whichever side has the newer
+  // meta.updatedAt.
+  function mergeStates(local, incoming) {
+    const days = { ...(local.days || {}) };
+    for (const [k, v] of Object.entries(incoming.days || {})) {
+      const cur = days[k];
+      if (!cur || (v.u || 0) > (cur.u || 0)) days[k] = v;
+    }
+    const { urges } = unionUrges(local.urges, incoming.urges);
+    const localUpdated = (local.meta && local.meta.updatedAt) || 0;
+    const incomingUpdated = (incoming.meta && incoming.meta.updatedAt) || 0;
+    const newer = incomingUpdated > localUpdated ? incoming : local;
+    return { ...local, days, urges, settings: newer.settings, meta: newer.meta };
   }
 
   // ---------- backup nag ----------
@@ -240,9 +279,9 @@
   return {
     LAPSES, RATINGS, HANGOVER, DAY_NAMES, MONTHS,
     pad, keyOf, dateOf, addDays, weekdayOf, weekStart, fmtLong, fmtShort, mmss,
-    todayKeyFor, urgeDayKeyFor,
+    todayKeyFor, urgeDayKeyFor, allWeekKeys,
     defaultState, defaultDay, normalize,
-    weekStats, lastLapse, mergeInto, backupDueDays,
+    weekStats, lastLapse, parseSafe, mergeInto, mergeStates, backupDueDays,
     defaultTab, nightCardDone, nightStepDone, firstIncompleteNightStep,
     recentUrges, fmtTime, fmtHour12, dayEndOptions, shortcutsUiVisible,
   };
