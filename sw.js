@@ -1,7 +1,11 @@
 // Network-first service worker: updates land immediately when online,
 // the app still opens offline from the last cached copy.
-const CACHE = 'improve-v5';
-const SHELL = ['./', './index.html', './app.css', './logic.js', './app.js', './manifest.webmanifest',
+const CACHE = 'improve-v6';
+const SHELL = ['./', './index.html', './logic.js', './manifest.webmanifest',
+  './js/core.js', './js/screens/onboarding.js', './js/screens/day.js', './js/screens/night.js',
+  './js/screens/week.js', './js/screens/more.js', './js/screens/urge.js',
+  './css/base.css', './css/screens/day.css', './css/screens/night.css', './css/screens/week.css',
+  './css/screens/more.css', './css/screens/urge.css',
   './fonts/outfit.css', './fonts/outfit-latin.woff2', './fonts/outfit-latin-ext.woff2',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
